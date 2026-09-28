@@ -107,6 +107,7 @@ export async function startApp(root: HTMLElement): Promise<void> {
         asking = true;
         await runQuestions(ctx, ok);
         asking = false;
+        window.dispatchEvent(new Event('opgave:synced')); // opdater blokke igen efter svar
       }
     }
   }

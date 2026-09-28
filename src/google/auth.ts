@@ -66,6 +66,7 @@ export async function signIn(): Promise<void> {
   try {
     await (scriptLoad ?? loadScript('https://accounts.google.com/gsi/client'));
   } catch {
+    scriptLoad = null; // så næste tryk på "Log ind" prøver at hente scriptet igen
     throw new Error('Kunne ikke hente Google-login – tjek din forbindelse');
   }
   return new Promise((resolve, reject) => {
@@ -88,6 +89,6 @@ export async function signIn(): Promise<void> {
 
 export function signOut(): void {
   const s = read();
-  if (s) google.accounts.oauth2.revoke(s.token, () => {});
+  if (s && typeof google !== 'undefined') google.accounts.oauth2.revoke(s.token, () => {});
   localStorage.removeItem(KEY);
 }
