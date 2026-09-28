@@ -151,14 +151,15 @@ export function createActions(deps: ActionDeps) {
 
     async updateSettings(patch: Partial<Settings>): Promise<void> {
       requireOnline();
-      const previousTime = store.data.settings.sundayReminderTime;
-      await setSettings(patch);
       const s = store.data.settings;
-      if (s.sundayReminderTime !== previousTime) {
+      const merged = { ...s, ...patch };
+      if (merged.sundayReminderTime !== s.sundayReminderTime) {
         const id = await calendar.upsertReminder(
-          calId(), s.reminderEventId, nextSunday(deps.now(), s.sundayReminderTime), deps.appUrl, deps.timeZone,
+          calId(), s.reminderEventId, nextSunday(deps.now(), merged.sundayReminderTime), deps.appUrl, deps.timeZone,
         );
-        if (id !== s.reminderEventId) await setSettings({ reminderEventId: id });
+        await setSettings({ ...patch, reminderEventId: id });
+      } else {
+        await setSettings(patch);
       }
     },
 

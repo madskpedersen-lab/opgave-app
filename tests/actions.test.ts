@@ -140,6 +140,12 @@ describe('indstillinger og visning', () => {
     expect(rem.start.getTime()).toBe(new Date(2026, 9, 4, 19, 30).getTime());
     expect(store.data.settings.sundayReminderTime).toBe('19:30');
   });
+  test('fejl ved upsertReminder gemmer ikke indstillinger', async () => {
+    cal.upsertReminder = async () => { throw new Error('boom'); };
+    await expect(actions.updateSettings({ sundayReminderTime: '19:30', surfaceDaysBefore: 3 })).rejects.toThrow();
+    expect(store.data.settings.sundayReminderTime).toBe('18:00');
+    expect(store.data.settings.surfaceDaysBefore).toBe(7);
+  });
   test('loadRange henter optaget tid fra andre kalendere og opgaveblokke', async () => {
     cal.busy = [{ start: new Date(2026, 8, 29, 12).toISOString(), end: new Date(2026, 8, 29, 13).toISOString() }];
     await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
