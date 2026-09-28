@@ -24,9 +24,9 @@ En personlig app til Android-telefonen, der holder styr på opgaver og lader bru
 | `domain/tasks` | Rene funktioner: opgavetyper, tilstandsskift, forfaldsberegning, gruppering af listen | intet |
 | `domain/availability` | Rene funktioner: ledige tidsrum ud fra indstillinger + optagne perioder; overlap-tjek | intet |
 | `domain/reconcile` | Rene funktioner: sammenhold opgaver med kalenderbegivenheder → liste af ændringer og "Blev det gjort?"-spørgsmål | `domain/tasks` |
-| `google/auth` | Login, token-fornyelse, log ud | GIS-script |
+| `google/auth` | Login, token i localStorage, log ud | GIS-script |
 | `google/calendar` | Kalenderliste, freeBusy, CRUD på begivenheder i "Opgaver", oprettelse af "Opgaver"-kalender og søndagsbegivenhed | `google/auth` |
-| `google/drive` | Læs/skriv `data.json` i appDataFolder med ETag-baseret versionskontrol | `google/auth` |
+| `google/drive` | Læs/skriv `data.json` i appDataFolder med versionskontrol | `google/auth` |
 | `store` | Appens tilstand i hukommelsen, lokal cache (localStorage), gem til Drive med retry | `google/drive`, `domain/*` |
 | `ui/plan` | Planlæg-skærm: FullCalendar + opgaveskuffe | `store`, `google/calendar`, `domain/availability` |
 | `ui/tasks` | Opgaveliste + opret/rediger-formular | `store` |
@@ -141,15 +141,15 @@ Hvis brugeren trykker "Færdig" på en planlagt engangs- eller tilbagevendende o
 
 ## Fejlhåndtering
 
-- **Token udløbet:** `google/auth` fornyer adgangen stille (`prompt: ''`). Hvis det fejler, vises banneret "Log ind igen". Handlingen, der fejlede, gentages efter login.
-- **Uden net:** Appen starter fra service worker-cache og localStorage-kopien. Opgavelisten kan ses, men planlægning og ændringer er slået fra, og banneret "Ingen forbindelse" vises.
-- **Samtidige ændringer:** Drive-skrivning sender `If-Match: <etag>`. Ved 412 hentes den nyeste fil, den lokale ændring anvendes igen (ændringer udtrykkes som funktioner på `AppData`), og skrivningen prøves igen (maks. 3 gange).
+- **Token udløbet:** Adgangstokenet gemmes i localStorage med udløbstid (ca. 1 time). Google kræver et brugertryk for at hente et nyt token, så når det er udløbet, viser appen banneret "Log ind igen". Et tryk henter et nyt token uden kontovalg (`prompt: ''`), og appen synkroniserer igen. Handlingen, der fejlede, skal brugeren udføre igen.
+- **Uden net:** Appen starter fra service worker-cache og localStorage-kopien. Opgavelisten kan ses. Alle ændrende handlinger afvises med beskeden "Ingen forbindelse", og banneret vises.
+- **Samtidige ændringer:** Appen husker Drive-filens `version`, som den blev indlæst med. Før hver skrivning hentes den aktuelle `version`. Hvis den er ændret, hentes den nyeste fil, og den lokale ændring anvendes igen (ændringer udtrykkes som funktioner på `AppData`). Skrivningen prøves igen (maks. 3 gange).
 - **Kalender-kald fejler** (andet end auth): handlingen rulles tilbage i UI'et, og der vises en kort fejlbesked. Opgavedata ændres først, når kalender-kaldet er lykkedes.
 
 ## Test
 
 - **Enhedstests (Vitest)** for `domain/*`: forfaldsberegning inkl. månedsgrænser, hvile/forfald-gruppering, ledige tidsrum og overlap, alle afstemningstilfælde, tilstandsskift for alle tre typer.
-- **Integrationstests** for `store` + falske `google/calendar`/`google/drive`: planlæg → flyt → færdig, ETag-konflikt, offline-tilstand.
+- **Integrationstests** for `store` + `actions` med falske `google/calendar`/`google/drive`: planlæg → flyt → færdig, versionskonflikt, offline-tilstand.
 - **Manuel test** på brugerens Android-telefon: installation på hjemmeskærm, login, træk-og-slip med fingeren, søndagspåmindelse.
 
 ## Opsætning (brugerens trin)
