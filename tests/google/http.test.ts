@@ -33,3 +33,11 @@ test('netværksfejl bliver OfflineError', async () => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
   await expect(gfetch('https://x')).rejects.toBeInstanceOf(OfflineError);
 });
+
+test('timeout bliver OfflineError, og fetch får et AbortSignal', async () => {
+  setTokenProvider(() => 'tok');
+  const fetchMock = vi.fn().mockRejectedValue(new DOMException('timeout', 'TimeoutError'));
+  vi.stubGlobal('fetch', fetchMock);
+  await expect(gfetch('https://x')).rejects.toBeInstanceOf(OfflineError);
+  expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+});

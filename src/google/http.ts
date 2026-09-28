@@ -22,7 +22,11 @@ export async function gfetch(url: string, init: RequestInit = {}): Promise<Respo
   if (!token) throw new AuthError('Ikke logget ind');
   let res: Response;
   try {
-    res = await fetch(url, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` } });
+    res = await fetch(url, {
+      ...init,
+      headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` },
+      signal: init.signal ?? AbortSignal.timeout(20_000),
+    });
   } catch {
     throw new OfflineError('Ingen forbindelse');
   }
