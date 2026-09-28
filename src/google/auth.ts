@@ -52,13 +52,22 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
+let scriptLoad: Promise<void> | null = null;
+
 export async function initAuth(): Promise<void> {
   setTokenProvider(() => read()?.token ?? null);
-  await loadScript('https://accounts.google.com/gsi/client');
+  // Start indlæsning af scriptet, men lad ikke opstart af appen fejle offline.
+  scriptLoad = loadScript('https://accounts.google.com/gsi/client');
+  scriptLoad.catch(() => {});
 }
 
 /** Skal kaldes fra et klik (ellers blokerer browseren popup'en). */
-export function signIn(): Promise<void> {
+export async function signIn(): Promise<void> {
+  try {
+    await (scriptLoad ?? loadScript('https://accounts.google.com/gsi/client'));
+  } catch {
+    throw new Error('Kunne ikke hente Google-login – tjek din forbindelse');
+  }
   return new Promise((resolve, reject) => {
     const client = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,

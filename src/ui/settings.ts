@@ -21,6 +21,15 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
   const surface = h('input', { type: 'number', min: 0, max: 60, value: s.surfaceDaysBefore });
 
   const save = async () => {
+    if (!reminder.value) {
+      toast('Vælg et tidspunkt for søndagspåmindelsen');
+      return;
+    }
+    const surfaceDays = Number(surface.value);
+    if (!Number.isFinite(surfaceDays) || surfaceDays < 0) {
+      toast('Antal dage skal være et tal på 0 eller derover');
+      return;
+    }
     const windows = { ...s.windows };
     for (const r of rows) {
       if (r.on.checked && r.from.value >= r.to.value) {
@@ -29,7 +38,7 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
       }
       windows[r.d] = r.on.checked ? { start: r.from.value, end: r.to.value } : null;
     }
-    const patch: Partial<Settings> = { windows, sundayReminderTime: reminder.value, surfaceDaysBefore: Math.max(0, Number(surface.value)) };
+    const patch: Partial<Settings> = { windows, sundayReminderTime: reminder.value, surfaceDaysBefore: Math.max(0, surfaceDays) };
     const ok = await ctx.guard(async () => { await ctx.actions.updateSettings(patch); return true; });
     if (ok) toast('Gemt');
   };

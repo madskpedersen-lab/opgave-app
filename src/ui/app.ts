@@ -37,7 +37,6 @@ export async function startApp(root: HTMLElement): Promise<void> {
   const banner = h('div', { class: 'banner', hidden: true });
   const main = h('main', {});
   const nav = h('nav', {});
-  let currentTab: Tab = 'plan';
   let unmount: () => void = () => {};
 
   const showBanner = (text: string, button?: { label: string; onClick: () => void }) => {
@@ -76,7 +75,6 @@ export async function startApp(root: HTMLElement): Promise<void> {
   };
 
   const show = (tab: Tab) => {
-    currentTab = tab;
     unmount();
     main.replaceChildren();
     main.className = `screen-${tab}`;
@@ -88,8 +86,13 @@ export async function startApp(root: HTMLElement): Promise<void> {
   nav.append(tabButton('plan', '📅 Planlæg'), tabButton('tasks', '✅ Opgaver'), tabButton('settings', '⚙️ Indstillinger'));
 
   let syncing = false;
+  let asking = false;
   async function syncAll() {
-    if (syncing || !hasValidToken()) return;
+    if (syncing) return;
+    if (!hasValidToken()) {
+      showBanner('Du skal logge ind igen.', { label: 'Log ind', onClick: login });
+      return;
+    }
     syncing = true;
     const ok = await guard(async () => {
       await store.sync();
@@ -99,8 +102,12 @@ export async function startApp(root: HTMLElement): Promise<void> {
     syncing = false;
     if (ok) {
       hideBanner();
-      show(currentTab); // genindlæs kalenderen efter sync
-      await runQuestions(ctx, ok);
+      window.dispatchEvent(new Event('opgave:synced'));
+      if (!asking) {
+        asking = true;
+        await runQuestions(ctx, ok);
+        asking = false;
+      }
     }
   }
 

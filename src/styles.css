@@ -10,6 +10,7 @@
   --border: #e1e4e2;
   --free: #ffffff;
   --closed: #eceeed;
+  --on-accent: #fff;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
     --border: #2b332f;
     --free: #1b211e;
     --closed: #141816;
+    --on-accent: #0f1f1a;
   }
 }
 
@@ -42,7 +44,7 @@ nav button.active { color: var(--accent); font-weight: 600; }
 .banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--accent-soft); }
 
 .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 12px 16px; border-radius: 12px; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.danger { color: var(--danger); }
 .btn.small { padding: 6px 12px; }
 
@@ -55,13 +57,14 @@ nav button.active { color: var(--accent); font-weight: 600; }
 .fc .fc-toolbar-title { font-size: 16px; }
 .fc .fc-button { padding: 4px 8px; font-size: 13px; }
 .fc .busy { background: var(--busy); opacity: 0.8; }
-.fc .task-block { background: var(--accent); border-color: var(--accent); }
+.fc .task-block { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.fc .task-block .fc-event-main { color: var(--on-accent); }
 .fc .task-block.done { opacity: 0.45; }
 
-.drawer { background: var(--surface); border-top: 1px solid var(--border); max-height: 56px; overflow: hidden; transition: max-height 0.2s; }
-.drawer.open { max-height: 45dvh; overflow: auto; }
-.drawer-handle { width: 100%; padding: 16px; border: 0; background: none; color: var(--muted); font-size: 14px; }
-.drawer-list { padding: 0 12px 12px; }
+.drawer { display: flex; flex-direction: column; background: var(--surface); border-top: 1px solid var(--border); max-height: 56px; overflow: hidden; transition: max-height 0.2s; }
+.drawer.open { max-height: 45dvh; overflow: hidden; }
+.drawer-handle { flex: none; width: 100%; padding: 16px; border: 0; background: none; color: var(--muted); font-size: 14px; }
+.drawer-list { flex: 1; min-height: 0; padding: 0 12px 12px; overflow: auto; }
 
 /* Opgaver */
 .task-list { padding: 8px 16px 96px; }
@@ -72,7 +75,7 @@ nav button.active { color: var(--accent); font-weight: 600; }
 .task-item.overdue .task-meta { color: var(--danger); }
 .task-title { font-weight: 600; }
 .task-meta { font-size: 13px; color: var(--muted); }
-.fab { position: absolute; right: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.fab { position: absolute; right: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 .empty, .muted { color: var(--muted); }
 .empty { text-align: center; padding: 24px 0; }
 

@@ -24,6 +24,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
 
   let busy: Span[] = [];
   let taskEvents: CalEvent[] = [];
+  let destroyed = false;
   const settings = () => ctx.store.data.settings;
   const findTask = (id: string) => ctx.store.data.tasks.find((t) => t.id === id);
 
@@ -70,7 +71,15 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     editable: true,
     droppable: true,
     eventAllow: (span, moving) => allowed(span.start, span.end, moving?.id || undefined),
+    // Eksterne træk fra skuffen (Draggable med create:false) valideres af FullCalendar via
+    // selectAllow, ikke eventAllow – se @fullcalendar/core/index.js buildViewUiProps: uden
+    // dragMeta.create bruges selectionConfig (selectAllow) i stedet for eventUiBases (eventAllow).
+    selectAllow: (span) => allowed(span.start, span.end),
     events: (info, success) => {
+      if (!ctx.store.data.settings.tasksCalendarId) {
+        success([]);
+        return;
+      }
       ctx
         .guard(async () => {
           const r = await ctx.actions.loadRange(info.start, info.end);
@@ -78,7 +87,10 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
           taskEvents = r.taskEvents;
           return true;
         })
-        .then(() => success(toEvents()));
+        .then(() => {
+          if (destroyed) return;
+          success(toEvents());
+        });
     },
     drop: (info) => {
       const t = findTask(info.draggedEl.dataset.taskId ?? '');
@@ -88,7 +100,9 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
         toast('Der er ikke plads her');
         return;
       }
-      ctx.guard(() => ctx.actions.schedule(t.id, info.date, end)).then(() => calendar.refetchEvents());
+      ctx.guard(() => ctx.actions.schedule(t.id, info.date, end)).then(() => {
+        if (!destroyed) calendar.refetchEvents();
+      });
     },
     eventDrop: (info) => onChanged(info.event, info.revert),
     eventResize: (info) => onChanged(info.event, info.revert),
@@ -101,6 +115,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
       await ctx.actions.move(taskId, ev.id, ev.start!, ev.end!);
       return true;
     }).then((ok) => {
+      if (destroyed) return;
       if (!ok) revert();
       calendar.refetchEvents();
     });
@@ -124,7 +139,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     }
     if (choice === 'remove') await ctx.guard(() => ctx.actions.unschedule(t.id, ev.id));
     if (choice === 'edit') await openTaskForm(ctx, t);
-    calendar.refetchEvents();
+    if (!destroyed) calendar.refetchEvents();
   }
 
   const renderDrawer = () => {
@@ -143,6 +158,11 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     }),
   });
 
+  const onSynced = () => {
+    if (!destroyed) calendar.refetchEvents();
+  };
+  window.addEventListener('opgave:synced', onSynced);
+
   renderDrawer();
   calendar.render();
   const unsubscribe = ctx.store.subscribe(() => {
@@ -151,6 +171,8 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   });
 
   return () => {
+    destroyed = true;
+    window.removeEventListener('opgave:synced', onSynced);
     unsubscribe();
     draggable.destroy();
     calendar.destroy();
