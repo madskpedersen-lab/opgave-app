@@ -5,7 +5,7 @@ import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
 } from './domain/tasks';
 import type { AppData, Settings, Task, TaskInput } from './domain/types';
-import type { CalEvent, CalendarApi } from './google/calendar';
+import type { CalEvent, CalendarApi, Color, ExternalEvent } from './google/calendar';
 import { OfflineError } from './google/http';
 import type { Store } from './store';
 
@@ -163,15 +163,20 @@ export function createActions(deps: ActionDeps) {
       }
     },
 
-    async loadRange(from: Date, to: Date): Promise<{ busy: Span[]; taskEvents: CalEvent[] }> {
+    /** Henter alt til kalendervisningen: aftaler fra synlige kalendere, optaget tid og opgaveblokke. */
+    async loadRange(from: Date, to: Date): Promise<{ external: ExternalEvent[]; busy: Span[]; taskEvents: CalEvent[]; taskColor?: Color }> {
       requireOnline();
       const own = calId();
-      const others = (await calendar.listCalendarIds()).filter((id) => id !== own);
-      const [busy, taskEvents] = await Promise.all([
-        calendar.freeBusy(others, from.toISOString(), to.toISOString()),
-        calendar.listTaskEvents(own, from.toISOString(), to.toISOString()),
+      const [min, max] = [from.toISOString(), to.toISOString()];
+      const calendars = await calendar.listCalendars();
+      const shown = calendars.filter((c) => c.selected && c.id !== own);
+      const [lists, taskEvents] = await Promise.all([
+        Promise.all(shown.map((c) => calendar.listEvents(c, min, max))),
+        calendar.listTaskEvents(own, min, max),
       ]);
-      return { busy: busy.map((b) => ({ start: new Date(b.start), end: new Date(b.end) })), taskEvents };
+      const external = lists.flat();
+      const busy = external.filter((e) => e.blocks).map((e) => ({ start: new Date(e.start), end: new Date(e.end) }));
+      return { external, busy, taskEvents, taskColor: calendars.find((c) => c.id === own)?.color };
     },
   };
 }

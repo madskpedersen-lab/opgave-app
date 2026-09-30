@@ -6,7 +6,6 @@
   --accent: #2f6f5e;
   --accent-soft: #dcebe5;
   --danger: #b3261e;
-  --busy: #c9cdd0;
   --border: #e1e4e2;
   --free: #ffffff;
   --closed: #eceeed;
@@ -22,7 +21,6 @@
     --accent: #6fbfa6;
     --accent-soft: #23372f;
     --danger: #f2b8b5;
-    --busy: #3a4240;
     --border: #2b332f;
     --free: #1b211e;
     --closed: #141816;
@@ -52,11 +50,17 @@ nav button.active { color: var(--accent); font-weight: 600; }
 
 /* Planlæg */
 .screen-plan { display: flex; flex-direction: column; overflow: hidden; }
-.cal { flex: 1; min-height: 0; padding: 8px 8px 0; }
+.cal { flex: 1; min-height: 0; padding: 8px 8px 0; overflow: hidden; }
 .fc { --fc-border-color: var(--border); --fc-page-bg-color: var(--free); --fc-non-business-color: var(--closed); --fc-today-bg-color: transparent; }
 .fc .fc-toolbar-title { font-size: 16px; }
 .fc .fc-button { padding: 4px 8px; font-size: 13px; }
-.fc .busy { background: var(--busy); opacity: 0.8; }
+.fc .external { font-size: 12px; }
+.fc .external .fc-event-main { padding: 1px 3px; }
+.fc .fc-timegrid-axis-cushion { font-size: 11px; }
+.fc-view-harness.slide-from-right { animation: slide-from-right 0.22s ease-out; }
+.fc-view-harness.slide-from-left { animation: slide-from-left 0.22s ease-out; }
+@keyframes slide-from-right { from { transform: translateX(24%); opacity: 0.3; } to { transform: none; opacity: 1; } }
+@keyframes slide-from-left { from { transform: translateX(-24%); opacity: 0.3; } to { transform: none; opacity: 1; } }
 .fc .task-block { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .fc .task-block .fc-event-main { color: var(--on-accent); }
 .fc .task-block.done { opacity: 0.45; }

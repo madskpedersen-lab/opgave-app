@@ -146,12 +146,23 @@ describe('indstillinger og visning', () => {
     expect(store.data.settings.sundayReminderTime).toBe('18:00');
     expect(store.data.settings.surfaceDaysBefore).toBe(7);
   });
-  test('loadRange henter optaget tid fra andre kalendere og opgaveblokke', async () => {
-    cal.busy = [{ start: new Date(2026, 8, 29, 12).toISOString(), end: new Date(2026, 8, 29, 13).toISOString() }];
+  test('loadRange viser synlige kalendere med farver og regner kun blokerende aftaler som optaget', async () => {
+    const at = (h: number) => new Date(2026, 8, 29, h).toISOString();
+    cal.external.set('primary', [
+      { id: 'x1', calendarId: 'primary', title: 'Tandlæge', start: at(12), end: at(13), allDay: false, color: { bg: '#f00', fg: '#fff' }, blocks: true },
+      { id: 'x2', calendarId: 'primary', title: 'Ferie', start: '2026-09-29', end: '2026-09-30', allDay: true, color: { bg: '#f00', fg: '#fff' }, blocks: false },
+    ]);
+    cal.calendars.set('skjult', []);
+    cal.hidden.add('skjult');
+    cal.external.set('skjult', [
+      { id: 'x3', calendarId: 'skjult', title: 'Skjult', start: at(16), end: at(17), allDay: false, color: { bg: '#0f0', fg: '#000' }, blocks: true },
+    ]);
     await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15));
     const r = await actions.loadRange(new Date(2026, 8, 28), new Date(2026, 9, 1));
+    expect(r.external.map((e) => e.title)).toEqual(['Tandlæge', 'Ferie']);
     expect(r.busy).toEqual([{ start: new Date(2026, 8, 29, 12), end: new Date(2026, 8, 29, 13) }]);
     expect(r.taskEvents.map((e) => e.taskId)).toEqual(['t1']);
+    expect(r.taskColor).toEqual({ bg: '#123456', fg: '#ffffff' });
   });
 });

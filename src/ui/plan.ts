@@ -4,10 +4,11 @@ import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { isValidPlacement, toBusinessHours, type Span } from '../domain/availability';
 import { activeBlocks, groupTasks } from '../domain/tasks';
-import type { CalEvent } from '../google/calendar';
+import type { CalEvent, Color, ExternalEvent } from '../google/calendar';
 import type { Ctx } from './context';
 import { h } from './dom';
 import { ask, toast } from './sheet';
+import { attachSwipe, type SwipeDirection } from './swipe';
 import { openTaskForm } from './taskForm';
 import { taskItem } from './tasks';
 
@@ -22,8 +23,12 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   );
   root.append(calEl, drawer);
 
+  let external: ExternalEvent[] = [];
   let busy: Span[] = [];
   let taskEvents: CalEvent[] = [];
+  let taskColor: Color | undefined;
+  let dragging = false;
+  let lastDragEnd = 0;
   let destroyed = false;
   const settings = () => ctx.store.data.settings;
   const findTask = (id: string) => ctx.store.data.tasks.find((t) => t.id === id);
@@ -38,13 +43,28 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const toEvents = (): EventInput[] => {
     const active = new Set(ctx.store.data.tasks.flatMap(activeBlocks).map((b) => b.eventId));
     return [
-      ...busy.map((b) => ({ start: b.start, end: b.end, display: 'background', classNames: ['busy'] })),
+      ...external.map((e) => ({
+        id: `ext:${e.calendarId}:${e.id}`,
+        title: e.title,
+        start: e.start,
+        end: e.end,
+        allDay: e.allDay,
+        editable: false,
+        backgroundColor: e.color.bg,
+        borderColor: e.color.bg,
+        textColor: e.color.fg,
+        classNames: ['external'],
+        extendedProps: { external: true },
+      })),
       ...taskEvents.map((e) => ({
         id: e.id,
         title: e.title,
         start: e.start,
         end: e.end,
         editable: active.has(e.id),
+        backgroundColor: taskColor?.bg,
+        borderColor: taskColor?.bg,
+        textColor: taskColor?.fg,
         classNames: active.has(e.id) ? ['task-block'] : ['task-block', 'done'],
         extendedProps: { taskId: e.taskId, active: active.has(e.id) },
       })),
@@ -62,7 +82,8 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     slotMaxTime: '23:00:00',
     slotDuration: '00:30:00',
     snapDuration: '00:15:00',
-    allDaySlot: false,
+    allDaySlot: true,
+    allDayText: 'Hele dagen',
     height: '100%',
     nowIndicator: true,
     longPressDelay: 300,
@@ -83,8 +104,10 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
       ctx
         .guard(async () => {
           const r = await ctx.actions.loadRange(info.start, info.end);
+          external = r.external;
           busy = r.busy;
           taskEvents = r.taskEvents;
+          taskColor = r.taskColor;
           return true;
         })
         .then(() => {
@@ -104,6 +127,10 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
         if (!destroyed) calendar.refetchEvents();
       });
     },
+    eventDragStart: () => { dragging = true; },
+    eventDragStop: () => { dragging = false; lastDragEnd = Date.now(); },
+    eventResizeStart: () => { dragging = true; },
+    eventResizeStop: () => { dragging = false; lastDragEnd = Date.now(); },
     eventDrop: (info) => onChanged(info.event, info.revert),
     eventResize: (info) => onChanged(info.event, info.revert),
     eventClick: (info) => openBlock(info.event),
@@ -122,7 +149,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   }
 
   async function openBlock(ev: EventApi) {
-    if (ev.display === 'background') return;
+    if (ev.extendedProps.external) return;
     const t = findTask(ev.extendedProps.taskId as string);
     if (!t) return;
     if (!ev.extendedProps.active) {
@@ -158,6 +185,18 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     }),
   });
 
+  const slide = (dir: SwipeDirection) => {
+    if (dir === 'left') calendar.next();
+    else calendar.prev();
+    const harness = calEl.querySelector<HTMLElement>('.fc-view-harness');
+    if (!harness) return;
+    harness.classList.remove('slide-from-left', 'slide-from-right');
+    void harness.offsetWidth; // genstart animationen
+    harness.classList.add(dir === 'left' ? 'slide-from-right' : 'slide-from-left');
+  };
+  // Et træk kan slutte lige før touchend når frem, så bloker også lige efter et træk.
+  const detachSwipe = attachSwipe(calEl, slide, () => dragging || Date.now() - lastDragEnd < 700);
+
   const onSynced = () => {
     if (!destroyed) calendar.refetchEvents();
   };
@@ -172,6 +211,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
 
   return () => {
     destroyed = true;
+    detachSwipe();
     window.removeEventListener('opgave:synced', onSynced);
     unsubscribe();
     draggable.destroy();

@@ -2,13 +2,28 @@ import { gfetch, isNotFound } from './http';
 
 export type CalEvent = { id: string; title: string; start: string; end: string; taskId?: string };
 export type NewEvent = { title: string; start: string; end: string; taskId: string };
-export type BusyPeriod = { start: string; end: string };
+export type Color = { bg: string; fg: string };
+export type CalendarInfo = { id: string; selected: boolean; color: Color };
+/** En begivenhed fra brugerens egne kalendere, som den vises i appen. */
+export type ExternalEvent = {
+  id: string;
+  calendarId: string;
+  title: string;
+  /** ISO-tidspunkt, eller YYYY-MM-DD for heldagsbegivenheder. */
+  start: string;
+  end: string;
+  allDay: boolean;
+  color: Color;
+  /** Optager tid, så opgaver ikke kan lægges her. */
+  blocks: boolean;
+};
 
 export interface CalendarApi {
-  listCalendarIds(): Promise<string[]>;
+  listCalendars(): Promise<CalendarInfo[]>;
   calendarExists(id: string): Promise<boolean>;
   createCalendar(summary: string, timeZone: string): Promise<string>;
-  freeBusy(calendarIds: string[], timeMin: string, timeMax: string): Promise<BusyPeriod[]>;
+  /** Begivenheder i en af brugerens kalendere (uden aflyste og afviste). */
+  listEvents(calendar: CalendarInfo, timeMin: string, timeMax: string): Promise<ExternalEvent[]>;
   /** Begivenheder i kalenderen med et taskId (dvs. ikke søndagsbegivenheden). */
   listTaskEvents(calendarId: string, timeMin: string, timeMax: string): Promise<CalEvent[]>;
   /** null hvis begivenheden er slettet. */
@@ -27,6 +42,9 @@ type GEvent = {
   id: string;
   status?: string;
   summary?: string;
+  colorId?: string;
+  transparency?: string;
+  attendees?: { self?: boolean; responseStatus?: string }[];
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
   extendedProperties?: { private?: Record<string, string> };
@@ -42,6 +60,22 @@ function toCalEvent(e: GEvent): CalEvent {
   };
 }
 
+export function toExternalEvent(e: GEvent, cal: CalendarInfo, palette: Record<string, Color>): ExternalEvent | null {
+  if (e.status === 'cancelled' || !e.start || !e.end) return null;
+  if (e.attendees?.some((a) => a.self && a.responseStatus === 'declined')) return null;
+  const allDay = !e.start.dateTime;
+  return {
+    id: e.id,
+    calendarId: cal.id,
+    title: e.summary || 'Optaget',
+    start: allDay ? e.start.date! : new Date(e.start.dateTime!).toISOString(),
+    end: allDay ? e.end.date! : new Date(e.end.dateTime!).toISOString(),
+    allDay,
+    color: (e.colorId && palette[e.colorId]) || cal.color,
+    blocks: !allDay && e.transparency !== 'transparent',
+  };
+}
+
 const jsonBody = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { 'Content-Type': 'application/json' },
@@ -53,10 +87,27 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function createCalendarApi(): CalendarApi {
+  let palette: Promise<Record<string, Color>> | null = null;
+  const eventPalette = () => {
+    palette ??= json<{ event: Record<string, { background: string; foreground: string }> }>(`${BASE}/colors`)
+      .then((r) => Object.fromEntries(Object.entries(r.event).map(([id, c]) => [id, { bg: c.background, fg: c.foreground }])))
+      .catch((e) => {
+        palette = null;
+        throw e;
+      });
+    return palette;
+  };
+
   return {
-    async listCalendarIds() {
-      const r = await json<{ items: { id: string }[] }>(`${BASE}/users/me/calendarList?fields=items(id)`);
-      return r.items.map((i) => i.id);
+    async listCalendars() {
+      const r = await json<{ items: { id: string; selected?: boolean; backgroundColor?: string; foregroundColor?: string }[] }>(
+        `${BASE}/users/me/calendarList?fields=items(id,selected,backgroundColor,foregroundColor)`,
+      );
+      return r.items.map((i) => ({
+        id: i.id,
+        selected: i.selected === true,
+        color: { bg: i.backgroundColor ?? '#9e9e9e', fg: i.foregroundColor ?? '#000000' },
+      }));
     },
 
     async calendarExists(id) {
@@ -74,13 +125,10 @@ export function createCalendarApi(): CalendarApi {
       return r.id;
     },
 
-    async freeBusy(calendarIds, timeMin, timeMax) {
-      if (calendarIds.length === 0) return [];
-      const r = await json<{ calendars: Record<string, { busy?: BusyPeriod[] }> }>(
-        `${BASE}/freeBusy`,
-        jsonBody('POST', { timeMin, timeMax, items: calendarIds.map((id) => ({ id })) }),
-      );
-      return Object.values(r.calendars).flatMap((c) => c.busy ?? []);
+    async listEvents(cal, timeMin, timeMax) {
+      const url = `${BASE}/calendars/${enc(cal.id)}/events?singleEvents=true&maxResults=2500&timeMin=${enc(timeMin)}&timeMax=${enc(timeMax)}`;
+      const [r, colors] = await Promise.all([json<{ items: GEvent[] }>(url), eventPalette()]);
+      return r.items.map((e) => toExternalEvent(e, cal, colors)).filter((e): e is ExternalEvent => e !== null);
     },
 
     async listTaskEvents(calendarId, timeMin, timeMax) {

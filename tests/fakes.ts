@@ -1,5 +1,5 @@
 import type { AppData } from '../src/domain/types';
-import type { BusyPeriod, CalEvent, CalendarApi, NewEvent } from '../src/google/calendar';
+import type { CalEvent, CalendarApi, CalendarInfo, ExternalEvent, NewEvent } from '../src/google/calendar';
 import type { DriveApi, DriveLoad, DriveSaved } from '../src/google/drive';
 import { ConflictError, OfflineError } from '../src/google/http';
 
@@ -43,7 +43,10 @@ export function memoryStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeIt
 
 export class FakeCalendar implements CalendarApi {
   calendars = new Map<string, CalEvent[]>([['primary', []]]);
-  busy: BusyPeriod[] = [];
+  /** Brugerens egne begivenheder pr. kalender. */
+  external = new Map<string, ExternalEvent[]>();
+  /** Kalendere uden flueben i Google Kalender. */
+  hidden = new Set<string>();
   reminders = new Map<string, { calendarId: string; start: Date }>();
   private seq = 0;
 
@@ -53,14 +56,20 @@ export class FakeCalendar implements CalendarApi {
     return list;
   }
 
-  async listCalendarIds() { return [...this.calendars.keys()]; }
+  async listCalendars(): Promise<CalendarInfo[]> {
+    return [...this.calendars.keys()].map((id) => ({
+      id,
+      selected: !this.hidden.has(id),
+      color: id.startsWith('cal-') ? { bg: '#123456', fg: '#ffffff' } : { bg: '#9fc6e7', fg: '#000000' },
+    }));
+  }
   async calendarExists(id: string) { return this.calendars.has(id); }
   async createCalendar(summary: string) {
     const id = `cal-${summary}-${++this.seq}`;
     this.calendars.set(id, []);
     return id;
   }
-  async freeBusy(ids: string[]) { return ids.includes('primary') ? this.busy : []; }
+  async listEvents(c: CalendarInfo) { return this.external.get(c.id) ?? []; }
   async listTaskEvents(calendarId: string) { return this.events(calendarId).filter((e) => e.taskId); }
   async getEvent(calendarId: string, eventId: string) { return this.events(calendarId).find((e) => e.id === eventId) ?? null; }
   async createEvent(calendarId: string, ev: NewEvent) {
