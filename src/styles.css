@@ -50,10 +50,11 @@ nav button.active { color: var(--accent); font-weight: 600; }
 
 /* Planlæg */
 .screen-plan { display: flex; flex-direction: column; overflow: hidden; }
-.cal { flex: 1; min-height: 0; padding: 8px 8px 0; overflow: hidden; }
+.cal { flex: 1; min-height: 0; padding: 4px 8px 0; overflow: hidden; }
 .fc { --fc-border-color: var(--border); --fc-page-bg-color: var(--free); --fc-non-business-color: var(--closed); --fc-today-bg-color: transparent; }
-.fc .fc-toolbar-title { font-size: 16px; }
-.fc .fc-button { padding: 4px 8px; font-size: 13px; }
+.fc .fc-toolbar.fc-header-toolbar { margin-bottom: 4px; gap: 4px; }
+.fc .fc-toolbar-title { font-size: 14px; white-space: nowrap; }
+.fc .fc-button { padding: 2px 7px; font-size: 12px; line-height: 1.5; white-space: nowrap; }
 .fc .external { font-size: 12px; }
 .fc .external .fc-event-main { padding: 1px 3px; }
 .fc .fc-timegrid-axis-cushion { font-size: 11px; }

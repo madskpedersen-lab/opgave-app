@@ -1,4 +1,5 @@
 import { Calendar, type EventApi, type EventInput } from '@fullcalendar/core';
+import type { PointerDragEvent } from '@fullcalendar/core/internal';
 import daLocale from '@fullcalendar/core/locales/da';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -8,6 +9,7 @@ import type { CalEvent, Color, ExternalEvent } from '../google/calendar';
 import type { Ctx } from './context';
 import { h } from './dom';
 import { ask, toast } from './sheet';
+import { startAutoScroll } from './autoscroll';
 import { attachSwipe, type SwipeDirection } from './swipe';
 import { openTaskForm } from './taskForm';
 import { taskItem } from './tasks';
@@ -29,6 +31,17 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   let taskColor: Color | undefined;
   let dragging = false;
   let lastDragEnd = 0;
+  let stopScroll: (() => void) | null = null;
+  const beginAutoScroll = (clientY: number) => {
+    stopScroll?.();
+    const scroller = calEl.querySelector('.fc-timegrid-body')?.closest<HTMLElement>('.fc-scroller');
+    stopScroll = scroller ? startAutoScroll(scroller, clientY) : null;
+  };
+  const endAutoScroll = () => {
+    stopScroll?.();
+    stopScroll = null;
+  };
+  const pointerY = (e: MouseEvent | TouchEvent) => ('touches' in e ? (e.touches[0]?.clientY ?? 0) : e.clientY);
   let destroyed = false;
   const settings = () => ctx.store.data.settings;
   const findTask = (id: string) => ctx.store.data.tasks.find((t) => t.id === id);
@@ -75,7 +88,8 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     locale: daLocale,
     initialView: 'timeGrid3',
     views: { timeGrid3: { type: 'timeGrid', duration: { days: 3 }, buttonText: '3 dage' } },
-    headerToolbar: { left: 'prev,next today', center: 'title', right: 'timeGrid3,timeGridWeek' },
+    headerToolbar: { left: 'prev,next', center: 'title', right: 'today timeGrid3,timeGridWeek' },
+    titleFormat: { day: 'numeric', month: 'short' },
     firstDay: 1,
     slotMinTime: '06:00:00',
     slotMaxTime: '23:00:00',
@@ -125,10 +139,10 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
         if (!destroyed) calendar.refetchEvents();
       });
     },
-    eventDragStart: () => { dragging = true; },
-    eventDragStop: () => { dragging = false; lastDragEnd = Date.now(); },
-    eventResizeStart: () => { dragging = true; },
-    eventResizeStop: () => { dragging = false; lastDragEnd = Date.now(); },
+    eventDragStart: (info) => { dragging = true; beginAutoScroll(pointerY(info.jsEvent)); },
+    eventDragStop: () => { dragging = false; lastDragEnd = Date.now(); endAutoScroll(); },
+    eventResizeStart: (info) => { dragging = true; beginAutoScroll(pointerY(info.jsEvent)); },
+    eventResizeStop: () => { dragging = false; lastDragEnd = Date.now(); endAutoScroll(); },
     eventDrop: (info) => onChanged(info.event, info.revert),
     eventResize: (info) => onChanged(info.event, info.revert),
     eventClick: (info) => openBlock(info.event),
@@ -199,12 +213,16 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   // så kalenderen får hele skærmen. FullCalendar måler kalenderens felter ved pointerdown,
   // så efter layoutskiftet udløses pointerdown igen, så felterne måles på ny.
   const dragEmitter = draggable.dragging.emitter;
-  const startPlacing = (ev: Parameters<typeof dragEmitter.trigger<'dragstart'>>[1]) => {
+  // FullCalendars egen auto-scroll måler før layoutskiftet og scroller for langsomt; vi bruger vores egen.
+  draggable.dragging.autoScroller.isEnabled = false;
+  const startPlacing = (ev: PointerDragEvent) => {
     document.body.classList.add('placing');
     calendar.updateSize();
     dragEmitter.trigger('pointerdown', ev);
+    beginAutoScroll(ev.pageY - window.scrollY);
   };
   const stopPlacing = () => {
+    endAutoScroll();
     document.body.classList.remove('placing');
     if (!destroyed) calendar.updateSize();
   };
