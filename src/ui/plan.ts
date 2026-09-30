@@ -43,12 +43,11 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const toEvents = (): EventInput[] => {
     const active = new Set(ctx.store.data.tasks.flatMap(activeBlocks).map((b) => b.eventId));
     return [
-      ...external.map((e) => ({
+      ...external.filter((e) => !e.allDay).map((e) => ({
         id: `ext:${e.calendarId}:${e.id}`,
         title: e.title,
         start: e.start,
         end: e.end,
-        allDay: e.allDay,
         editable: false,
         backgroundColor: e.color.bg,
         borderColor: e.color.bg,
@@ -82,8 +81,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     slotMaxTime: '23:00:00',
     slotDuration: '00:30:00',
     snapDuration: '00:15:00',
-    allDaySlot: true,
-    allDayText: 'Hele dagen',
+    allDaySlot: false,
     height: '100%',
     nowIndicator: true,
     longPressDelay: 300,
@@ -197,6 +195,22 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   // Et træk kan slutte lige før touchend når frem, så bloker også lige efter et træk.
   const detachSwipe = attachSwipe(calEl, slide, () => dragging || Date.now() - lastDragEnd < 700);
 
+  // Mens en opgave trækkes fra skuffen, skjules skuffe, værktøjslinje og navigation,
+  // så kalenderen får hele skærmen. FullCalendar måler kalenderens felter ved pointerdown,
+  // så efter layoutskiftet udløses pointerdown igen, så felterne måles på ny.
+  const dragEmitter = draggable.dragging.emitter;
+  const startPlacing = (ev: Parameters<typeof dragEmitter.trigger<'dragstart'>>[1]) => {
+    document.body.classList.add('placing');
+    calendar.updateSize();
+    dragEmitter.trigger('pointerdown', ev);
+  };
+  const stopPlacing = () => {
+    document.body.classList.remove('placing');
+    if (!destroyed) calendar.updateSize();
+  };
+  dragEmitter.on('dragstart', startPlacing);
+  dragEmitter.on('dragend', stopPlacing);
+
   const onSynced = () => {
     if (!destroyed) calendar.refetchEvents();
   };
@@ -212,6 +226,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   return () => {
     destroyed = true;
     detachSwipe();
+    stopPlacing();
     window.removeEventListener('opgave:synced', onSynced);
     unsubscribe();
     draggable.destroy();

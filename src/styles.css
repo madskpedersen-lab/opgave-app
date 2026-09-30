@@ -102,3 +102,9 @@ input, select, textarea { font: inherit; color: var(--text); background: var(--b
 .settings label.check { flex-direction: row; align-items: center; gap: 8px; margin: 0; color: var(--text); }
 
 .toast { position: fixed; left: 16px; right: 16px; bottom: 80px; background: var(--text); color: var(--bg); padding: 12px 16px; border-radius: 12px; z-index: 200; text-align: center; }
+
+/* Mens en opgave placeres: kun kalenderen er synlig */
+body.placing nav,
+body.placing .banner,
+body.placing .fc-header-toolbar { display: none; }
+body.placing .drawer { max-height: 0 !important; border-top: 0; transition: none; }
