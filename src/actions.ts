@@ -3,6 +3,7 @@ import { nextSunday, toDateStr } from './domain/dates';
 import { reconcile, type EventTimes, type Question } from './domain/reconcile';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
+  restoreTask,
 } from './domain/tasks';
 import type { AppData, Settings, Task, TaskInput } from './domain/types';
 import type { CalEvent, CalendarApi, Color, ExternalEvent } from './google/calendar';
@@ -117,6 +118,11 @@ export function createActions(deps: ActionDeps) {
     async finishProject(taskId: string): Promise<void> {
       requireOnline();
       await mapTask(taskId, (t) => finishProject(t, deps.now().toISOString()));
+    },
+
+    async restoreTask(taskId: string): Promise<void> {
+      requireOnline();
+      await mapTask(taskId, (t) => restoreTask(t, deps.now()));
     },
 
     async reconcile(): Promise<Question[]> {

@@ -1,4 +1,4 @@
-import { defaultData } from './domain/defaults';
+import { defaultData, normalizeData } from './domain/defaults';
 import type { AppData } from './domain/types';
 import type { DriveApi } from './google/drive';
 import { ConflictError } from './google/http';
@@ -15,7 +15,7 @@ export class Store {
 
   constructor(private drive: DriveApi, private storage: KV) {
     const raw = storage.getItem(KEY);
-    this.data = raw ? (JSON.parse(raw) as AppData) : defaultData();
+    this.data = raw ? normalizeData(JSON.parse(raw) as AppData) : defaultData();
   }
 
   subscribe(fn: () => void): () => void {
@@ -34,7 +34,7 @@ export class Store {
       const remote = await this.drive.load();
       this.fileId = remote.fileId;
       this.version = remote.version;
-      if (remote.data) this.set(remote.data);
+      if (remote.data) this.set(normalizeData(remote.data));
       else await this.persist();
     });
   }
@@ -51,7 +51,7 @@ export class Store {
           const remote = await this.drive.load();
           this.fileId = remote.fileId;
           this.version = remote.version;
-          this.set(fn(remote.data ?? defaultData()));
+          this.set(fn(remote.data ? normalizeData(remote.data) : defaultData()));
         }
       }
     });

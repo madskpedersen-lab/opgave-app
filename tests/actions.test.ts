@@ -124,6 +124,14 @@ describe('færdig og afstemning', () => {
     expect(await actions.reconcile()).toEqual([]);
     expect(task().scheduled).toBeUndefined();
   });
+  test('restoreTask genopretter en færdig engangsopgave', async () => {
+    await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
+    await actions.markDone('t1');
+    expect(task().completedAt).toBeDefined();
+    await actions.restoreTask('t1');
+    expect(task().completedAt).toBeUndefined();
+    expect(task().history).toEqual([]);
+  });
   test('deleteTask kan slette begivenheder', async () => {
     await actions.createTask({ title: 'Drivhus', durationMin: 120, kind: 'project' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));

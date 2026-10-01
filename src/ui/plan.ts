@@ -3,7 +3,7 @@ import type { PointerDragEvent } from '@fullcalendar/core/internal';
 import daLocale from '@fullcalendar/core/locales/da';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import { isValidPlacement, toBusinessHours, type Span } from '../domain/availability';
+import { isValidPlacement, type Span } from '../domain/availability';
 import { activeBlocks, groupTasks } from '../domain/tasks';
 import type { CalEvent, Color, ExternalEvent } from '../google/calendar';
 import type { Ctx } from './context';
@@ -13,6 +13,8 @@ import { startAutoScroll } from './autoscroll';
 import { attachSwipe, type SwipeDirection } from './swipe';
 import { openTaskForm } from './taskForm';
 import { taskItem } from './tasks';
+
+const hourTime = (h: number) => `${String(h).padStart(2, '0')}:00:00`;
 
 export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const calEl = h('div', { class: 'cal' });
@@ -51,7 +53,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     ...taskEvents.filter((e) => e.id !== exceptEventId).map((e) => ({ start: new Date(e.start), end: new Date(e.end) })),
   ];
   const allowed = (start: Date, end: Date, exceptEventId?: string) =>
-    isValidPlacement({ start, end }, settings().windows, occupied(exceptEventId));
+    isValidPlacement({ start, end }, occupied(exceptEventId));
 
   const toEvents = (): EventInput[] => {
     const active = new Set(ctx.store.data.tasks.flatMap(activeBlocks).map((b) => b.eventId));
@@ -86,13 +88,13 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const calendar = new Calendar(calEl, {
     plugins: [timeGridPlugin, interactionPlugin],
     locale: daLocale,
-    initialView: 'timeGrid3',
+    initialView: 'timeGridWeek',
     views: { timeGrid3: { type: 'timeGrid', duration: { days: 3 }, buttonText: '3 dage' } },
     headerToolbar: { left: 'prev,next', center: 'title', right: 'today timeGrid3,timeGridWeek' },
     titleFormat: { day: 'numeric', month: 'short' },
     firstDay: 1,
-    slotMinTime: '06:00:00',
-    slotMaxTime: '23:00:00',
+    slotMinTime: hourTime(settings().visibleHours.start),
+    slotMaxTime: hourTime(settings().visibleHours.end),
     slotDuration: '00:30:00',
     snapDuration: '00:15:00',
     allDaySlot: false,
@@ -100,7 +102,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     nowIndicator: true,
     longPressDelay: 300,
     eventLongPressDelay: 300,
-    businessHours: toBusinessHours(settings().windows),
     editable: true,
     droppable: true,
     eventAllow: (span, moving) => allowed(span.start, span.end, moving?.id || undefined),
@@ -234,11 +235,17 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   };
   window.addEventListener('opgave:synced', onSynced);
 
+  let shownHours = { ...settings().visibleHours };
   renderDrawer();
   calendar.render();
   const unsubscribe = ctx.store.subscribe(() => {
     renderDrawer();
-    calendar.setOption('businessHours', toBusinessHours(settings().windows));
+    const { start, end } = settings().visibleHours;
+    if (start !== shownHours.start || end !== shownHours.end) {
+      shownHours = { start, end };
+      calendar.setOption('slotMinTime', hourTime(start));
+      calendar.setOption('slotMaxTime', hourTime(end));
+    }
   });
 
   return () => {

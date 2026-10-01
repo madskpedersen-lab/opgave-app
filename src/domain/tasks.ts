@@ -55,6 +55,16 @@ export function finishProject(t: Task, nowIso: string): Task {
   return { ...t, completedAt: nowIso };
 }
 
+/** Gør en færdig opgave aktiv igen. En blok der allerede er overstået, fjernes. */
+export function restoreTask(t: Task, now: Date): Task {
+  const next = { ...t };
+  delete next.completedAt;
+  if (t.kind === 'project') return next;
+  next.history = t.history.slice(0, -1);
+  if (next.scheduled && new Date(next.scheduled.end) <= now) delete next.scheduled;
+  return next;
+}
+
 export function activeBlocks(t: Task): Block[] {
   if (t.completedAt) return [];
   if (t.kind === 'project') {

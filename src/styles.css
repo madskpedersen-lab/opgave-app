@@ -98,9 +98,6 @@ input, select, textarea { font: inherit; color: var(--text); background: var(--b
 
 .settings { padding: 8px 16px 32px; display: flex; flex-direction: column; }
 .settings .btn { margin-top: 12px; }
-.day-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; align-items: center; margin-bottom: 6px; }
-.day-row input[type='time'] { padding: 6px; }
-.settings label.check { flex-direction: row; align-items: center; gap: 8px; margin: 0; color: var(--text); }
 
 .toast { position: fixed; left: 16px; right: 16px; bottom: 80px; background: var(--text); color: var(--bg); padding: 12px 16px; border-radius: 12px; z-index: 200; text-align: center; }
 
@@ -109,3 +106,5 @@ body.placing nav,
 body.placing .banner,
 body.placing .fc-header-toolbar { display: none; }
 body.placing .drawer { max-height: 0 !important; border-top: 0; transition: none; }
+.hours-row { display: flex; gap: 12px; }
+.hours-row label { flex: 1; }

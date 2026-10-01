@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject,
-  groupTasks, isOverdue, moveBlock, newTask, projectStats, removeBlock,
+  groupTasks, isOverdue, moveBlock, newTask, projectStats, removeBlock, restoreTask,
 } from '../../src/domain/tasks';
 import type { Task } from '../../src/domain/types';
 
@@ -110,5 +110,28 @@ describe('groupTasks', () => {
     expect(isOverdue({ ...car(), dueDate: '2026-09-27' }, today)).toBe(true);
     expect(isOverdue({ ...car(), dueDate: '2026-09-28' }, today)).toBe(false);
     expect(isOverdue(addBlock({ ...car(), dueDate: '2026-09-27' }, block('e1')), today)).toBe(false);
+  });
+});
+
+describe('restoreTask', () => {
+  const now = new Date('2026-10-01T12:00:00.000Z');
+  test('engangsopgave kommer tilbage og mister sidste historikdato', () => {
+    const done = completeTask(once(), '2026-09-28', NOW);
+    const t = restoreTask(done, now);
+    expect(t.completedAt).toBeUndefined();
+    expect(t.history).toEqual([]);
+  });
+  test('en overstået blok fjernes, en fremtidig bliver aktiv igen', () => {
+    const past = completeTask(addBlock(once(), block('e1', '2026-09-29T14:00:00.000Z', '2026-09-29T15:00:00.000Z')), '2026-09-28', NOW);
+    expect(restoreTask(past, now).scheduled).toBeUndefined();
+    const future = completeTask(addBlock(once(), block('e2', '2026-10-02T14:00:00.000Z', '2026-10-02T15:00:00.000Z')), '2026-09-28', NOW);
+    const t = restoreTask(future, now);
+    expect(activeBlocks(t).map((b) => b.eventId)).toEqual(['e2']);
+  });
+  test('afsluttet stor opgave bliver aktiv igen med sine blokke', () => {
+    const p = completeSession(addBlock(house(), block('e1')), 'e1');
+    const t = restoreTask(finishProject(p, NOW), now);
+    expect(t.completedAt).toBeUndefined();
+    expect(projectStats(t).count).toBe(1);
   });
 });

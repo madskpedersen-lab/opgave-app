@@ -7,16 +7,18 @@ import { ask } from './sheet';
 import { openTaskForm } from './taskForm';
 
 export async function openTaskActions(ctx: Ctx, t: Task): Promise<void> {
-  type A = 'edit' | 'done' | 'finish' | 'delete';
+  type A = 'edit' | 'done' | 'finish' | 'restore' | 'delete';
   const options: { label: string; value: A; kind?: 'primary' | 'danger' }[] = [];
   if (!t.completedAt && t.kind !== 'project') options.push({ label: 'Færdig', value: 'done', kind: 'primary' });
   if (!t.completedAt && t.kind === 'project') options.push({ label: 'Afslut projekt', value: 'finish', kind: 'primary' });
   if (!t.completedAt) options.push({ label: 'Rediger', value: 'edit' });
+  if (t.completedAt) options.push({ label: 'Genopret', value: 'restore', kind: 'primary' });
   options.push({ label: 'Slet', value: 'delete', kind: 'danger' });
 
   const choice = await ask(t.title, h('p', { class: 'muted' }, taskMeta(t, ctx.today())), options);
   if (choice === 'done') await ctx.guard(() => ctx.actions.markDone(t.id));
   if (choice === 'finish') await ctx.guard(() => ctx.actions.finishProject(t.id));
+  if (choice === 'restore') await ctx.guard(() => ctx.actions.restoreTask(t.id));
   if (choice === 'edit') await openTaskForm(ctx, t);
   if (choice === 'delete') {
     let deleteEvents = false;

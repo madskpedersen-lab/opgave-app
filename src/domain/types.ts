@@ -1,4 +1,3 @@
-export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = søndag
 export type TaskKind = 'once' | 'recurring' | 'project';
 export type Interval = { count: number; unit: 'day' | 'week' | 'month' };
 
@@ -28,10 +27,9 @@ export type TaskInput = {
   note?: string;
 };
 
-export type TimeWindow = { start: string; end: string }; // "HH:MM"
-
 export type Settings = {
-  windows: Record<Weekday, TimeWindow | null>;
+  /** Hele timer (0–24), som kalenderen viser på alle dage. */
+  visibleHours: { start: number; end: number };
   sundayReminderTime: string;
   surfaceDaysBefore: number;
   tasksCalendarId?: string;

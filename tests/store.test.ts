@@ -68,3 +68,16 @@ test('fejl ved gem kastes videre og blokerer ikke næste update', async () => {
   await store.update(addTask('b'));
   expect(drive.data!.tasks.map((t) => t.id)).toEqual(['a', 'b']);
 });
+
+test('data fra en ældre version omlægges både lokalt og fra Drive', async () => {
+  const old = { version: 1, tasks: [], settings: { windows: {}, sundayReminderTime: '18:00', surfaceDaysBefore: 7 } };
+  const storage = memoryStorage();
+  storage.setItem('opgave-app:data', JSON.stringify(old));
+  const drive = new FakeDrive();
+  expect(new Store(drive, storage).data.settings.visibleHours).toEqual({ start: 6, end: 23 });
+  drive.data = old as unknown as AppData;
+  const store = new Store(drive, memoryStorage());
+  await store.sync();
+  expect(store.data.settings).not.toHaveProperty('windows');
+  expect(store.data.settings.visibleHours).toEqual({ start: 6, end: 23 });
+});
