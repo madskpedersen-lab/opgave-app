@@ -48,12 +48,8 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const settings = () => ctx.store.data.settings;
   const findTask = (id: string) => ctx.store.data.tasks.find((t) => t.id === id);
 
-  const occupied = (exceptEventId?: string): Span[] => [
-    ...busy,
-    ...taskEvents.filter((e) => e.id !== exceptEventId).map((e) => ({ start: new Date(e.start), end: new Date(e.end) })),
-  ];
-  const allowed = (start: Date, end: Date, exceptEventId?: string) =>
-    isValidPlacement({ start, end }, occupied(exceptEventId));
+  // Kun aftaler fra brugerens kalendere blokerer; opgaver må gerne overlappe hinanden.
+  const allowed = (start: Date, end: Date) => isValidPlacement({ start, end }, busy);
 
   const toEvents = (): EventInput[] => {
     const active = new Set(ctx.store.data.tasks.flatMap(activeBlocks).map((b) => b.eventId));
@@ -104,7 +100,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     eventLongPressDelay: 300,
     editable: true,
     droppable: true,
-    eventAllow: (span, moving) => allowed(span.start, span.end, moving?.id || undefined),
+    eventAllow: (span) => allowed(span.start, span.end),
     // Eksterne træk fra skuffen (Draggable med create:false) valideres af FullCalendar via
     // selectAllow, ikke eventAllow – se @fullcalendar/core/index.js buildViewUiProps: uden
     // dragMeta.create bruges selectionConfig (selectAllow) i stedet for eventUiBases (eventAllow).
