@@ -68,7 +68,8 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
         title: e.title,
         start: e.start,
         end: e.end,
-        editable: active.has(e.id),
+        startEditable: active.has(e.id),
+        durationEditable: false,
         backgroundColor: taskColor?.bg,
         borderColor: taskColor?.bg,
         textColor: taskColor?.fg,
@@ -96,6 +97,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     longPressDelay: 300,
     eventLongPressDelay: 300,
     editable: true,
+    eventDurationEditable: false, // længden ændres via opgavens varighed, ikke ved at trække i kanten
     droppable: true,
     events: (info, success) => {
       if (!ctx.store.data.settings.tasksCalendarId) {
@@ -125,10 +127,7 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     },
     eventDragStart: (info) => { dragging = true; beginAutoScroll(pointerY(info.jsEvent)); },
     eventDragStop: () => { dragging = false; lastDragEnd = Date.now(); endAutoScroll(); },
-    eventResizeStart: (info) => { dragging = true; beginAutoScroll(pointerY(info.jsEvent)); },
-    eventResizeStop: () => { dragging = false; lastDragEnd = Date.now(); endAutoScroll(); },
     eventDrop: (info) => onChanged(info.event, info.revert),
-    eventResize: (info) => onChanged(info.event, info.revert),
     eventClick: (info) => openBlock(info.event),
   });
 
