@@ -14,8 +14,6 @@ export type ExternalEvent = {
   end: string;
   allDay: boolean;
   color: Color;
-  /** Optager tid, så opgaver ikke kan lægges her. */
-  blocks: boolean;
 };
 
 export interface CalendarApi {
@@ -29,7 +27,7 @@ export interface CalendarApi {
   /** null hvis begivenheden er slettet. */
   getEvent(calendarId: string, eventId: string): Promise<CalEvent | null>;
   createEvent(calendarId: string, ev: NewEvent): Promise<CalEvent>;
-  updateEventTime(calendarId: string, eventId: string, start: string, end: string): Promise<void>;
+  updateEvent(calendarId: string, eventId: string, patch: { title?: string; start?: string; end?: string }): Promise<void>;
   deleteEvent(calendarId: string, eventId: string): Promise<void>;
   /** Opretter eller opdaterer søndagsbegivenheden. Returnerer dens id. */
   upsertReminder(calendarId: string, existingId: string | undefined, start: Date, appUrl: string, timeZone: string): Promise<string>;
@@ -43,7 +41,6 @@ type GEvent = {
   status?: string;
   summary?: string;
   colorId?: string;
-  transparency?: string;
   attendees?: { self?: boolean; responseStatus?: string }[];
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
@@ -72,7 +69,6 @@ export function toExternalEvent(e: GEvent, cal: CalendarInfo, palette: Record<st
     end: allDay ? e.end.date! : new Date(e.end.dateTime!).toISOString(),
     allDay,
     color: (e.colorId && palette[e.colorId]) || cal.color,
-    blocks: !allDay && e.transparency !== 'transparent',
   };
 }
 
@@ -162,11 +158,12 @@ export function createCalendarApi(): CalendarApi {
       return toCalEvent(e);
     },
 
-    async updateEventTime(calendarId, eventId, start, end) {
-      await gfetch(
-        `${BASE}/calendars/${enc(calendarId)}/events/${enc(eventId)}`,
-        jsonBody('PATCH', { start: { dateTime: start }, end: { dateTime: end } }),
-      );
+    async updateEvent(calendarId, eventId, patch) {
+      const body: Record<string, unknown> = {};
+      if (patch.title !== undefined) body.summary = patch.title;
+      if (patch.start) body.start = { dateTime: patch.start };
+      if (patch.end) body.end = { dateTime: patch.end };
+      await gfetch(`${BASE}/calendars/${enc(calendarId)}/events/${enc(eventId)}`, jsonBody('PATCH', body));
     },
 
     async deleteEvent(calendarId, eventId) {

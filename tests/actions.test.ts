@@ -132,6 +132,34 @@ describe('færdig og afstemning', () => {
     expect(task().completedAt).toBeUndefined();
     expect(task().history).toEqual([]);
   });
+  test('editTask ændrer længde og navn på planlagte blokke i kalenderen', async () => {
+    await actions.createTask({ title: 'Drivhus', durationMin: 120, kind: 'project' });
+    await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));
+    await actions.editTask('t1', { title: 'Byg drivhus', durationMin: 60, kind: 'project' });
+    const id = task().sessions![0].eventId;
+    const ev = (await cal.getEvent(tasksCal(), id))!;
+    expect(ev.title).toBe('🔨 Byg drivhus');
+    expect(ev.end).toBe(new Date(2026, 8, 29, 15).toISOString());
+    expect(task().sessions![0].end).toBe(new Date(2026, 8, 29, 15).toISOString());
+  });
+  test('editTask uden ændring af navn og varighed rører ikke kalenderen', async () => {
+    await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
+    await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15));
+    let calls = 0;
+    const orig = cal.updateEvent.bind(cal);
+    cal.updateEvent = async (...a) => { calls++; return orig(...a); };
+    await actions.editTask('t1', { title: 'A', durationMin: 60, kind: 'once', note: 'ny note' });
+    expect(calls).toBe(0);
+  });
+  test('reactivate gør en færdig blok aktiv igen', async () => {
+    await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
+    await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15));
+    const b = task().scheduled!;
+    await actions.markDone('t1');
+    await actions.reactivate('t1', b);
+    expect(task().completedAt).toBeUndefined();
+    expect(task().scheduled).toEqual(b);
+  });
   test('deleteTask kan slette begivenheder', async () => {
     await actions.createTask({ title: 'Drivhus', durationMin: 120, kind: 'project' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));
@@ -154,22 +182,21 @@ describe('indstillinger og visning', () => {
     expect(store.data.settings.sundayReminderTime).toBe('18:00');
     expect(store.data.settings.surfaceDaysBefore).toBe(7);
   });
-  test('loadRange viser synlige kalendere med farver og regner kun blokerende aftaler som optaget', async () => {
+  test('loadRange viser aftaler fra synlige kalendere og opgaveblokke', async () => {
     const at = (h: number) => new Date(2026, 8, 29, h).toISOString();
     cal.external.set('primary', [
-      { id: 'x1', calendarId: 'primary', title: 'Tandlæge', start: at(12), end: at(13), allDay: false, color: { bg: '#f00', fg: '#fff' }, blocks: true },
-      { id: 'x2', calendarId: 'primary', title: 'Ferie', start: '2026-09-29', end: '2026-09-30', allDay: true, color: { bg: '#f00', fg: '#fff' }, blocks: false },
+      { id: 'x1', calendarId: 'primary', title: 'Tandlæge', start: at(12), end: at(13), allDay: false, color: { bg: '#f00', fg: '#fff' } },
+      { id: 'x2', calendarId: 'primary', title: 'Ferie', start: '2026-09-29', end: '2026-09-30', allDay: true, color: { bg: '#f00', fg: '#fff' } },
     ]);
     cal.calendars.set('skjult', []);
     cal.hidden.add('skjult');
     cal.external.set('skjult', [
-      { id: 'x3', calendarId: 'skjult', title: 'Skjult', start: at(16), end: at(17), allDay: false, color: { bg: '#0f0', fg: '#000' }, blocks: true },
+      { id: 'x3', calendarId: 'skjult', title: 'Skjult', start: at(16), end: at(17), allDay: false, color: { bg: '#0f0', fg: '#000' } },
     ]);
     await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15));
     const r = await actions.loadRange(new Date(2026, 8, 28), new Date(2026, 9, 1));
     expect(r.external.map((e) => e.title)).toEqual(['Tandlæge', 'Ferie']);
-    expect(r.busy).toEqual([{ start: new Date(2026, 8, 29, 12), end: new Date(2026, 8, 29, 13) }]);
     expect(r.taskEvents.map((e) => e.taskId)).toEqual(['t1']);
     expect(r.taskColor).toEqual({ bg: '#123456', fg: '#ffffff' });
   });

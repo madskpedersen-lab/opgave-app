@@ -44,7 +44,32 @@ export function completeTask(t: Task, doneDate: string, nowIso: string): Task {
   if (t.kind === 'once') return { ...t, completedAt: nowIso, history };
   const rest = { ...t };
   delete rest.scheduled;
+  delete rest.previousDueDate;
+  if (t.dueDate) rest.previousDueDate = t.dueDate;
   return { ...rest, dueDate: addInterval(doneDate, t.interval!), history };
+}
+
+/** Fortryder "Færdig" for en blok i kalenderen, så opgaven igen er planlagt med den blok. */
+export function reactivateBlock(t: Task, b: Block): Task {
+  const next: Task = { ...t };
+  delete next.completedAt;
+  if (t.kind === 'project') {
+    const has = (t.sessions ?? []).some((s) => s.eventId === b.eventId);
+    next.sessions = has
+      ? t.sessions!.map((s) => (s.eventId === b.eventId ? { ...s, status: 'planned' } : s))
+      : [...(t.sessions ?? []), { ...b, status: 'planned' }];
+    return next;
+  }
+  if (t.completedAt || (t.kind === 'recurring' && t.scheduled?.eventId !== b.eventId)) {
+    next.history = t.history.slice(0, -1);
+  }
+  if (t.kind === 'recurring') {
+    delete next.dueDate;
+    if (t.previousDueDate) next.dueDate = t.previousDueDate;
+    delete next.previousDueDate;
+  }
+  next.scheduled = { ...b };
+  return next;
 }
 
 export function completeSession(t: Task, eventId: string): Task {

@@ -77,10 +77,11 @@ export class FakeCalendar implements CalendarApi {
     this.events(calendarId).push(e);
     return e;
   }
-  async updateEventTime(calendarId: string, eventId: string, start: string, end: string) {
+  async updateEvent(calendarId: string, eventId: string, patch: { title?: string; start?: string; end?: string }) {
     const e = this.events(calendarId).find((x) => x.id === eventId)!;
-    e.start = start;
-    e.end = end;
+    if (patch.title !== undefined) e.title = patch.title;
+    if (patch.start) e.start = patch.start;
+    if (patch.end) e.end = patch.end;
   }
   async deleteEvent(calendarId: string, eventId: string) {
     this.calendars.set(calendarId, this.events(calendarId).filter((e) => e.id !== eventId));

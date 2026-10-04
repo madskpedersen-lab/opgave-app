@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject,
-  groupTasks, isOverdue, moveBlock, newTask, projectStats, removeBlock, restoreTask,
+  groupTasks, isOverdue, moveBlock, newTask, projectStats, reactivateBlock, removeBlock, restoreTask,
 } from '../../src/domain/tasks';
 import type { Task } from '../../src/domain/types';
 
@@ -133,5 +133,35 @@ describe('restoreTask', () => {
     const t = restoreTask(finishProject(p, NOW), now);
     expect(t.completedAt).toBeUndefined();
     expect(projectStats(t).count).toBe(1);
+  });
+});
+
+describe('reactivateBlock', () => {
+  const b = block('e1', '2026-09-29T14:00:00.000Z', '2026-09-29T15:00:00.000Z');
+  test('færdig engangsopgave bliver aktiv igen med blokken', () => {
+    const t = reactivateBlock(completeTask(addBlock(once(), b), '2026-09-29', NOW), b);
+    expect(t.completedAt).toBeUndefined();
+    expect(t.history).toEqual([]);
+    expect(activeBlocks(t)).toEqual([b]);
+  });
+  test('tilbagevendende opgave får blokken og sin tidligere forfaldsdato tilbage', () => {
+    const before = { ...addBlock(car(), b), dueDate: '2026-09-30' };
+    const done = completeTask(before, '2026-09-29', NOW);
+    expect(done.dueDate).toBe('2026-10-20');
+    const t = reactivateBlock(done, b);
+    expect(t.dueDate).toBe('2026-09-30');
+    expect(t.history).toEqual([]);
+    expect(activeBlocks(t)).toEqual([b]);
+  });
+  test('tilbagevendende opgave uden kendt tidligere forfaldsdato forfalder nu', () => {
+    const done = { ...completeTask(addBlock(car(), b), '2026-09-29', NOW) };
+    delete done.previousDueDate;
+    expect(reactivateBlock(done, b).dueDate).toBeUndefined();
+  });
+  test('færdig blok i stor opgave bliver planlagt igen, også hvis projektet er afsluttet', () => {
+    const p = finishProject(completeSession(addBlock(house(), b), 'e1'), NOW);
+    const t = reactivateBlock(p, b);
+    expect(t.completedAt).toBeUndefined();
+    expect(t.sessions).toEqual([{ ...b, status: 'planned' }]);
   });
 });

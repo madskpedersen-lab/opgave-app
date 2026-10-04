@@ -1,11 +1,10 @@
-import type { Span } from './domain/availability';
 import { nextSunday, toDateStr } from './domain/dates';
 import { reconcile, type EventTimes, type Question } from './domain/reconcile';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
-  restoreTask,
+  reactivateBlock, restoreTask,
 } from './domain/tasks';
-import type { AppData, Settings, Task, TaskInput } from './domain/types';
+import type { AppData, Block, Settings, Task, TaskInput } from './domain/types';
 import type { CalEvent, CalendarApi, Color, ExternalEvent } from './google/calendar';
 import { OfflineError } from './google/http';
 import type { Store } from './store';
@@ -19,6 +18,8 @@ export type ActionDeps = {
   timeZone: string;
   isOnline: () => boolean;
 };
+
+const eventTitle = (t: Task) => (t.kind === 'project' ? `🔨 ${t.title}` : t.title);
 
 export function createActions(deps: ActionDeps) {
   const { store, calendar } = deps;
@@ -69,7 +70,34 @@ export function createActions(deps: ActionDeps) {
 
     async editTask(id: string, input: TaskInput): Promise<void> {
       requireOnline();
-      await mapTask(id, (t) => editTask(t, input));
+      const before = find(id);
+      const after = editTask(before, input);
+      const renamed = after.title !== before.title;
+      const resized = after.durationMin !== before.durationMin;
+      // Planlagte blokke følger med: nyt navn og ny længde fra samme starttid.
+      const blocks = renamed || resized ? activeBlocks(before) : [];
+      const ends = new Map<string, string>();
+      for (const b of blocks) {
+        const end = new Date(new Date(b.start).getTime() + after.durationMin * 60000).toISOString();
+        await calendar.updateEvent(calId(), b.eventId, {
+          ...(renamed ? { title: eventTitle(after) } : {}),
+          ...(resized ? { end } : {}),
+        });
+        if (resized) ends.set(b.eventId, end);
+      }
+      await mapTask(id, (t) => {
+        let next = editTask(t, input);
+        for (const [eventId, end] of ends) {
+          const b = activeBlocks(next).find((x) => x.eventId === eventId);
+          if (b) next = moveBlock(next, eventId, b.start, end);
+        }
+        return next;
+      });
+    },
+
+    async reactivate(taskId: string, block: Block): Promise<void> {
+      requireOnline();
+      await mapTask(taskId, (t) => reactivateBlock(t, block));
     },
 
     async deleteTask(id: string, deleteEvents: boolean): Promise<void> {
@@ -84,7 +112,7 @@ export function createActions(deps: ActionDeps) {
       requireOnline();
       const t = find(taskId);
       const ev = await calendar.createEvent(calId(), {
-        title: t.kind === 'project' ? `🔨 ${t.title}` : t.title,
+        title: eventTitle(t),
         start: start.toISOString(),
         end: end.toISOString(),
         taskId,
@@ -94,7 +122,7 @@ export function createActions(deps: ActionDeps) {
 
     async move(taskId: string, eventId: string, start: Date, end: Date): Promise<void> {
       requireOnline();
-      await calendar.updateEventTime(calId(), eventId, start.toISOString(), end.toISOString());
+      await calendar.updateEvent(calId(), eventId, { start: start.toISOString(), end: end.toISOString() });
       await mapTask(taskId, (t) => moveBlock(t, eventId, start.toISOString(), end.toISOString()));
     },
 
@@ -169,8 +197,8 @@ export function createActions(deps: ActionDeps) {
       }
     },
 
-    /** Henter alt til kalendervisningen: aftaler fra synlige kalendere, optaget tid og opgaveblokke. */
-    async loadRange(from: Date, to: Date): Promise<{ external: ExternalEvent[]; busy: Span[]; taskEvents: CalEvent[]; taskColor?: Color }> {
+    /** Henter alt til kalendervisningen: aftaler fra synlige kalendere og opgaveblokke. */
+    async loadRange(from: Date, to: Date): Promise<{ external: ExternalEvent[]; taskEvents: CalEvent[]; taskColor?: Color }> {
       requireOnline();
       const own = calId();
       const [min, max] = [from.toISOString(), to.toISOString()];
@@ -181,8 +209,7 @@ export function createActions(deps: ActionDeps) {
         calendar.listTaskEvents(own, min, max),
       ]);
       const external = lists.flat();
-      const busy = external.filter((e) => e.blocks).map((e) => ({ start: new Date(e.start), end: new Date(e.end) }));
-      return { external, busy, taskEvents, taskColor: calendars.find((c) => c.id === own)?.color };
+      return { external, taskEvents, taskColor: calendars.find((c) => c.id === own)?.color };
     },
   };
 }

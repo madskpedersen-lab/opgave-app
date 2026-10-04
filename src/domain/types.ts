@@ -14,6 +14,8 @@ export type Task = {
   createdAt: string;
   scheduled?: Block;
   dueDate?: string;
+  /** Forfaldsdatoen før seneste "Færdig" (tilbagevendende), så den kan fortrydes. */
+  previousDueDate?: string;
   sessions?: Session[];
   completedAt?: string;
   history: string[];

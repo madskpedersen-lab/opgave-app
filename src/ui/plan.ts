@@ -3,12 +3,11 @@ import type { PointerDragEvent } from '@fullcalendar/core/internal';
 import daLocale from '@fullcalendar/core/locales/da';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import { isValidPlacement, type Span } from '../domain/availability';
 import { activeBlocks, groupTasks } from '../domain/tasks';
 import type { CalEvent, Color, ExternalEvent } from '../google/calendar';
 import type { Ctx } from './context';
 import { h } from './dom';
-import { ask, toast } from './sheet';
+import { ask } from './sheet';
 import { startAutoScroll } from './autoscroll';
 import { attachSwipe, type SwipeDirection } from './swipe';
 import { openTaskForm } from './taskForm';
@@ -28,7 +27,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   root.append(calEl, drawer);
 
   let external: ExternalEvent[] = [];
-  let busy: Span[] = [];
   let taskEvents: CalEvent[] = [];
   let taskColor: Color | undefined;
   let dragging = false;
@@ -49,7 +47,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
   const findTask = (id: string) => ctx.store.data.tasks.find((t) => t.id === id);
 
   // Kun aftaler fra brugerens kalendere blokerer; opgaver må gerne overlappe hinanden.
-  const allowed = (start: Date, end: Date) => isValidPlacement({ start, end }, busy);
 
   const toEvents = (): EventInput[] => {
     const active = new Set(ctx.store.data.tasks.flatMap(activeBlocks).map((b) => b.eventId));
@@ -100,11 +97,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     eventLongPressDelay: 300,
     editable: true,
     droppable: true,
-    eventAllow: (span) => allowed(span.start, span.end),
-    // Eksterne træk fra skuffen (Draggable med create:false) valideres af FullCalendar via
-    // selectAllow, ikke eventAllow – se @fullcalendar/core/index.js buildViewUiProps: uden
-    // dragMeta.create bruges selectionConfig (selectAllow) i stedet for eventUiBases (eventAllow).
-    selectAllow: (span) => allowed(span.start, span.end),
     events: (info, success) => {
       if (!ctx.store.data.settings.tasksCalendarId) {
         success([]);
@@ -114,7 +106,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
         .guard(async () => {
           const r = await ctx.actions.loadRange(info.start, info.end);
           external = r.external;
-          busy = r.busy;
           taskEvents = r.taskEvents;
           taskColor = r.taskColor;
           return true;
@@ -128,10 +119,6 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
       const t = findTask(info.draggedEl.dataset.taskId ?? '');
       if (!t) return;
       const end = new Date(info.date.getTime() + t.durationMin * 60000);
-      if (!allowed(info.date, end)) {
-        toast('Der er ikke plads her');
-        return;
-      }
       ctx.guard(() => ctx.actions.schedule(t.id, info.date, end)).then(() => {
         if (!destroyed) calendar.refetchEvents();
       });
@@ -162,7 +149,14 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
     const t = findTask(ev.extendedProps.taskId as string);
     if (!t) return;
     if (!ev.extendedProps.active) {
-      toast('Denne blok er afsluttet');
+      const again = await ask(t.title, h('p', { class: 'muted' }, 'Denne blok er markeret som færdig.'), [
+        { label: 'Genaktiver', value: true, kind: 'primary' },
+      ]);
+      if (again) {
+        const block = { eventId: ev.id, start: ev.start!.toISOString(), end: ev.end!.toISOString() };
+        await ctx.guard(() => ctx.actions.reactivate(t.id, block));
+        if (!destroyed) calendar.refetchEvents();
+      }
       return;
     }
     const choice = await ask(t.title, null, [
