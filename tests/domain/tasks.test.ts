@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject,
-  applyOrder, groupTasks, isOverdue, moveBlock, newTask, projectStats, reactivateBlock, removeBlock, restoreTask,
+  applyOrder, splitTask, groupTasks, isOverdue, moveBlock, newTask, projectStats, reactivateBlock, removeBlock, restoreTask,
 } from '../../src/domain/tasks';
 import type { Task } from '../../src/domain/types';
 
@@ -184,5 +184,22 @@ describe('prioritering', () => {
     const tasks = [{ ...once(), id: 'a' }, { ...once(), id: 'b' }, { ...once(), id: 'x', order: 5 }];
     const out = applyOrder(tasks, ['b', 'a']);
     expect(out.map((t) => [t.id, t.order])).toEqual([['a', 1], ['b', 0], ['x', 5]]);
+  });
+});
+
+describe('splitTask', () => {
+  test('giver original med ny varighed og en frisk kopi lige efter den', () => {
+    const orig = { ...addBlock(car(), block('e1')), order: 3, dueDate: '2026-10-05', note: 'fælge' };
+    const [a, b] = splitTask(orig, 'r9', NOW, 40, 20);
+    expect(a.durationMin).toBe(40);
+    expect(a.scheduled).toEqual(block('e1'));
+    expect(b).toMatchObject({ id: 'r9', title: 'Vask bil (2)', durationMin: 20, kind: 'recurring', interval: { count: 3, unit: 'week' }, dueDate: '2026-10-05', note: 'fælge', history: [], createdAt: NOW, order: 3.5 });
+    expect(b.scheduled).toBeUndefined();
+  });
+  test('stor opgave: kopien har ingen blokke; uden rækkefølge får kopien heller ingen', () => {
+    const p = completeSession(addBlock(house(), block('e1')), 'e1');
+    const [, b] = splitTask(p, 'p9', NOW, 120, 120);
+    expect(b.sessions).toEqual([]);
+    expect(b.order).toBeUndefined();
   });
 });

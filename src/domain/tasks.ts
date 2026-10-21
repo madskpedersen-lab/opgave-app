@@ -90,6 +90,18 @@ export function restoreTask(t: Task, now: Date): Task {
   return next;
 }
 
+/** Deler en opgave i to: originalen (del 1) med ny varighed og en ny, uplanlagt kopi (del 2). */
+export function splitTask(t: Task, newId: string, nowIso: string, firstMin: number, secondMin: number): [Task, Task] {
+  const copy = newTask(
+    { title: `${t.title} (2)`, durationMin: secondMin, kind: t.kind, interval: t.interval, note: t.note },
+    newId,
+    nowIso,
+  );
+  if (t.kind === 'recurring' && t.dueDate) copy.dueDate = t.dueDate;
+  if (t.order !== undefined) copy.order = t.order + 0.5;
+  return [{ ...t, durationMin: firstMin }, copy];
+}
+
 /** Giver opgaverne i `ids` rækkefølge efter deres plads i listen. */
 export function applyOrder(tasks: Task[], ids: string[]): Task[] {
   const pos = new Map(ids.map((id, i) => [id, i]));

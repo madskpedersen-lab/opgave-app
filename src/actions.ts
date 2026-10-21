@@ -1,7 +1,7 @@
 import { nextSunday, toDateStr } from './domain/dates';
 import { reconcile, type EventTimes, type Question } from './domain/reconcile';
 import {
-  activeBlocks, addBlock, applyOrder, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
+  activeBlocks, addBlock, applyOrder, splitTask, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
   reactivateBlock, restoreTask,
 } from './domain/tasks';
 import type { AppData, Block, Settings, Task, TaskInput } from './domain/types';
@@ -148,6 +148,18 @@ export function createActions(deps: ActionDeps) {
     async finishProject(taskId: string): Promise<void> {
       requireOnline();
       await mapTask(taskId, (t) => finishProject(t, deps.now().toISOString()));
+    },
+
+    /** Deler en opgave i to (se splitTask). Originalens planlagte blokke får den nye længde. */
+    async split(taskId: string, firstMin: number, secondMin: number): Promise<void> {
+      requireOnline();
+      const t = find(taskId);
+      const [, copy] = splitTask(t, deps.newId(), deps.now().toISOString(), firstMin, secondMin);
+      await this.editTask(taskId, { title: t.title, durationMin: firstMin, kind: t.kind, interval: t.interval, note: t.note });
+      await store.update((d) => {
+        const i = d.tasks.findIndex((x) => x.id === taskId);
+        return { ...d, tasks: [...d.tasks.slice(0, i + 1), copy, ...d.tasks.slice(i + 1)] };
+      });
     },
 
     async reorder(ids: string[]): Promise<void> {

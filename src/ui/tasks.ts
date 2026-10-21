@@ -3,16 +3,46 @@ import { activeBlocks, groupTasks, isOverdue } from '../domain/tasks';
 import type { Task } from '../domain/types';
 import type { Ctx } from './context';
 import { h } from './dom';
-import { taskMeta } from './format';
-import { ask } from './sheet';
+import { formatDuration, taskMeta } from './format';
+import { ask, toast } from './sheet';
 import { openTaskForm } from './taskForm';
 
+/** "Del opgaven op": samme tid for begge dele, eller ret tiden for hver del. */
+async function openSplit(ctx: Ctx, t: Task): Promise<void> {
+  const mode = await ask('Del opgaven op', h('p', {}, `Tager hver del lige så lang tid (${formatDuration(t.durationMin)})?`), [
+    { label: `Ja, ${formatDuration(t.durationMin)} hver`, value: 'same' as const, kind: 'primary' },
+    { label: 'Ret tiden', value: 'edit' as const },
+  ]);
+  if (mode === 'same') {
+    await ctx.guard(() => ctx.actions.split(t.id, t.durationMin, t.durationMin));
+    return;
+  }
+  if (mode !== 'edit') return;
+  const half = Math.max(5, Math.round(t.durationMin / 2 / 5) * 5);
+  const first = h('input', { type: 'number', min: 5, step: 5, value: half });
+  const second = h('input', { type: 'number', min: 5, step: 5, value: half });
+  const body = h('div', { class: 'form' }, h('label', {}, `${t.title} (minutter)`, first), h('label', {}, `${t.title} (2) (minutter)`, second));
+  const ok = await ask('Ret tiden', body, [
+    { label: 'Del op', value: true, kind: 'primary' },
+    { label: 'Annuller', value: false },
+  ]);
+  if (!ok) return;
+  const a = Number(first.value);
+  const b = Number(second.value);
+  if (!(a > 0) || !(b > 0)) {
+    toast('Begge dele skal have en varighed');
+    return;
+  }
+  await ctx.guard(() => ctx.actions.split(t.id, a, b));
+}
+
 export async function openTaskActions(ctx: Ctx, t: Task): Promise<void> {
-  type A = 'edit' | 'done' | 'finish' | 'restore' | 'delete';
+  type A = 'edit' | 'split' | 'done' | 'finish' | 'restore' | 'delete';
   const options: { label: string; value: A; kind?: 'primary' | 'danger' }[] = [];
   if (!t.completedAt && t.kind !== 'project') options.push({ label: 'Færdig', value: 'done', kind: 'primary' });
   if (!t.completedAt && t.kind === 'project') options.push({ label: 'Afslut projekt', value: 'finish', kind: 'primary' });
   if (!t.completedAt) options.push({ label: 'Rediger', value: 'edit' });
+  if (!t.completedAt) options.push({ label: 'Del opgaven op', value: 'split' });
   if (t.completedAt) options.push({ label: 'Genopret', value: 'restore', kind: 'primary' });
   options.push({ label: 'Slet', value: 'delete', kind: 'danger' });
 
@@ -21,6 +51,7 @@ export async function openTaskActions(ctx: Ctx, t: Task): Promise<void> {
   if (choice === 'finish') await ctx.guard(() => ctx.actions.finishProject(t.id));
   if (choice === 'restore') await ctx.guard(() => ctx.actions.restoreTask(t.id));
   if (choice === 'edit') await openTaskForm(ctx, t);
+  if (choice === 'split') await openSplit(ctx, t);
   if (choice === 'delete') {
     let deleteEvents = false;
     if (activeBlocks(t).length > 0) {

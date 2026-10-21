@@ -176,6 +176,16 @@ describe('færdig og afstemning', () => {
     await actions.reorder(['t2', 't1']);
     expect(store.data.tasks.map((t) => [t.id, t.order])).toEqual([['t1', 1], ['t2', 0]]);
   });
+  test('split deler en planlagt opgave: blokken forkortes og kopien lægges lige efter', async () => {
+    await actions.createTask({ title: 'A', durationMin: 120, kind: 'once' });
+    await actions.createTask({ title: 'B', durationMin: 30, kind: 'once' });
+    await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));
+    await actions.split('t1', 60, 60);
+    expect(store.data.tasks.map((t) => [t.title, t.durationMin])).toEqual([['A', 60], ['A (2)', 60], ['B', 30]]);
+    const ev = (await cal.getEvent(tasksCal(), task().scheduled!.eventId))!;
+    expect(ev.end).toBe(new Date(2026, 8, 29, 15).toISOString());
+    expect(store.data.tasks[1].scheduled).toBeUndefined();
+  });
   test('deleteTask kan slette begivenheder', async () => {
     await actions.createTask({ title: 'Drivhus', durationMin: 120, kind: 'project' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));
