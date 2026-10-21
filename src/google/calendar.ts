@@ -3,7 +3,7 @@ import { gfetch, isNotFound } from './http';
 export type CalEvent = { id: string; title: string; start: string; end: string; taskId?: string };
 export type NewEvent = { title: string; start: string; end: string; taskId: string };
 export type Color = { bg: string; fg: string };
-export type CalendarInfo = { id: string; selected: boolean; color: Color };
+export type CalendarInfo = { id: string; selected: boolean; primary?: boolean; color: Color };
 /** En begivenhed fra brugerens egne kalendere, som den vises i appen. */
 export type ExternalEvent = {
   id: string;
@@ -96,12 +96,13 @@ export function createCalendarApi(): CalendarApi {
 
   return {
     async listCalendars() {
-      const r = await json<{ items: { id: string; selected?: boolean; backgroundColor?: string; foregroundColor?: string }[] }>(
-        `${BASE}/users/me/calendarList?fields=items(id,selected,backgroundColor,foregroundColor)`,
+      const r = await json<{ items: { id: string; selected?: boolean; primary?: boolean; backgroundColor?: string; foregroundColor?: string }[] }>(
+        `${BASE}/users/me/calendarList?fields=items(id,selected,primary,backgroundColor,foregroundColor)`,
       );
       return r.items.map((i) => ({
         id: i.id,
         selected: i.selected === true,
+        primary: i.primary === true,
         color: { bg: i.backgroundColor ?? '#9e9e9e', fg: i.foregroundColor ?? '#000000' },
       }));
     },

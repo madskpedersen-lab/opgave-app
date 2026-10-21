@@ -1,3 +1,4 @@
+import { atTime } from './dates';
 import { activeBlocks, moveBlock, removeBlock } from './tasks';
 import type { Task } from './types';
 
@@ -6,7 +7,19 @@ export type Question = { taskId: string; eventId: string; title: string; start: 
 
 const sameTime = (a: string, b: string) => new Date(a).getTime() === new Date(b).getTime();
 
-export function reconcile(tasks: Task[], events: Map<string, EventTimes>, now: Date): { tasks: Task[]; questions: Question[] } {
+/** Hvornår der må spørges til en blok: når den er slut, men tidligst på spørgetidspunktet samme dag. */
+export function askTime(end: Date, askAfter: string): Date {
+  if (askAfter === 'immediately') return end;
+  const at = atTime(end, askAfter);
+  return at > end ? at : end;
+}
+
+export function reconcile(
+  tasks: Task[],
+  events: Map<string, EventTimes>,
+  now: Date,
+  askAfter = 'immediately',
+): { tasks: Task[]; questions: Question[] } {
   const questions: Question[] = [];
   const out = tasks.map((original) => {
     let t = original;
@@ -20,7 +33,7 @@ export function reconcile(tasks: Task[], events: Map<string, EventTimes>, now: D
       if (!sameTime(ev.start, b.start) || !sameTime(ev.end, b.end)) {
         t = moveBlock(t, b.eventId, new Date(ev.start).toISOString(), new Date(ev.end).toISOString());
       }
-      if (new Date(ev.end) < now) {
+      if (askTime(new Date(ev.end), askAfter) <= now) {
         questions.push({ taskId: t.id, eventId: b.eventId, title: t.title, start: new Date(ev.start).toISOString(), kind: t.kind === 'project' ? 'session' : 'task' });
       }
     }

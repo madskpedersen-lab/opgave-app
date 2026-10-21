@@ -4,9 +4,11 @@ import daLocale from '@fullcalendar/core/locales/da';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import { activeBlocks, groupTasks } from '../domain/tasks';
+import type { Block } from '../domain/types';
 import type { CalEvent, Color, ExternalEvent } from '../google/calendar';
 import type { Ctx } from './context';
 import { h } from './dom';
+import { formatDateTime } from './format';
 import { ask } from './sheet';
 import { startAutoScroll } from './autoscroll';
 import { attachSwipe, type SwipeDirection } from './swipe';
@@ -121,26 +123,53 @@ export function mountPlan(ctx: Ctx, root: HTMLElement): () => void {
       const t = findTask(info.draggedEl.dataset.taskId ?? '');
       if (!t) return;
       const end = new Date(info.date.getTime() + t.durationMin * 60000);
-      ctx.guard(() => ctx.actions.schedule(t.id, info.date, end)).then(() => {
+      ctx.guard(async () => {
+        const block = await ctx.actions.schedule(t.id, info.date, end);
+        if (!destroyed) calendar.refetchEvents();
+        await askIfDone(t.id, block, () => ctx.actions.unschedule(t.id, block.eventId));
+      }).then(() => {
         if (!destroyed) calendar.refetchEvents();
       });
     },
     eventDragStart: (info) => { dragging = true; beginAutoScroll(pointerY(info.jsEvent)); },
     eventDragStop: () => { dragging = false; lastDragEnd = Date.now(); endAutoScroll(); },
-    eventDrop: (info) => onChanged(info.event, info.revert),
+    eventDrop: (info) => onChanged(info.event, info.oldEvent, info.revert),
     eventClick: (info) => openBlock(info.event),
   });
 
-  function onChanged(ev: EventApi, revert: () => void) {
+  function onChanged(ev: EventApi, old: EventApi, revert: () => void) {
     const taskId = ev.extendedProps.taskId as string;
     ctx.guard(async () => {
       await ctx.actions.move(taskId, ev.id, ev.start!, ev.end!);
       return true;
-    }).then((ok) => {
+    }).then(async (ok) => {
       if (destroyed) return;
-      if (!ok) revert();
+      if (!ok) {
+        revert();
+        return;
+      }
       calendar.refetchEvents();
+      const block = { eventId: ev.id, start: ev.start!.toISOString(), end: ev.end!.toISOString() };
+      await askIfDone(taskId, block, () => ctx.actions.move(taskId, ev.id, old.start!, old.end!));
+      if (!destroyed) calendar.refetchEvents();
     });
+  }
+
+  /** En opgave lagt før nu: spørg om den er gjort. Ja = færdig, Nej = fortryd placeringen. */
+  async function askIfDone(taskId: string, block: Block, undo: () => Promise<unknown>) {
+    if (new Date(block.start) >= new Date()) return;
+    const t = findTask(taskId);
+    if (!t) return;
+    const kind = t.kind === 'project' ? 'session' : 'task';
+    const text = kind === 'session'
+      ? `Fik du arbejdet på «${t.title}» ${formatDateTime(block.start)}?`
+      : `Blev «${t.title}» gjort ${formatDateTime(block.start)}?`;
+    const yes = await ask('Er den fuldført?', h('p', {}, text), [
+      { label: 'Ja', value: true, kind: 'primary' },
+      { label: 'Nej, fortryd', value: false },
+    ]);
+    if (yes === true) await ctx.guard(() => ctx.actions.answer({ taskId, eventId: block.eventId, title: t.title, start: block.start, kind }, true));
+    if (yes === false) await ctx.guard(undo);
   }
 
   async function openBlock(ev: EventApi) {

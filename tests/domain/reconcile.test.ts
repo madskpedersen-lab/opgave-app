@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { reconcile, type EventTimes } from '../../src/domain/reconcile';
 import { addBlock, newTask } from '../../src/domain/tasks';
 
@@ -52,4 +52,25 @@ test('begivenheder der ikke er hentet, ignoreres', () => {
   const r = reconcile([once], new Map(), now);
   expect(r.tasks[0]).toBe(once);
   expect(r.questions).toEqual([]);
+});
+
+describe('spørgetidspunkt', () => {
+  // Blok i går 14-15 (lokal tid)
+  const y = { start: new Date(2026, 9, 20, 14).toISOString(), end: new Date(2026, 9, 20, 15).toISOString() };
+  const t = addBlock(newTask({ title: 'Ring', durationMin: 60, kind: 'once' }, 'o9', NOW_ISO), { eventId: 'e9', ...y });
+  const ask = (now: Date, askAfter: string) => reconcile([t], new Map([['e9', y]]), now, askAfter).questions.length;
+
+  test('umiddelbart: spørg så snart blokken er slut', () => {
+    expect(ask(new Date(2026, 9, 20, 15, 1), 'immediately')).toBe(1);
+    expect(ask(new Date(2026, 9, 20, 14, 59), 'immediately')).toBe(0);
+  });
+  test('fast tidspunkt: vent til klokkeslættet samme dag', () => {
+    expect(ask(new Date(2026, 9, 20, 19, 59), '20:00')).toBe(0);
+    expect(ask(new Date(2026, 9, 20, 20, 0), '20:00')).toBe(1);
+    expect(ask(new Date(2026, 9, 21, 8, 0), '20:00')).toBe(1);
+  });
+  test('slutter blokken efter klokkeslættet, spørges efter blokken', () => {
+    expect(ask(new Date(2026, 9, 20, 15, 30), '12:00')).toBe(1);
+    expect(ask(new Date(2026, 9, 20, 14, 30), '12:00')).toBe(0);
+  });
 });

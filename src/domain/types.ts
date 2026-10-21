@@ -32,6 +32,8 @@ export type TaskInput = {
 export type Settings = {
   /** Hele timer (0–24), som kalenderen viser på alle dage. */
   visibleHours: { start: number; end: number };
+  /** Hvornår der spørges "Blev det gjort?": 'immediately' eller et klokkeslæt "HH:MM" samme dag. */
+  askAfter: string;
   sundayReminderTime: string;
   surfaceDaysBefore: number;
   tasksCalendarId?: string;

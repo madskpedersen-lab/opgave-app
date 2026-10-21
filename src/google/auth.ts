@@ -1,8 +1,12 @@
-import { CLIENT_ID } from '../config';
+import { APP_URL, CLIENT_ID } from '../config';
 import { setTokenProvider } from './http';
+import { buildSilentAuthUrl, parseTokenHash } from './oauthRedirect';
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive.appdata'];
 const KEY = 'opgave-app:token';
+const ACCOUNT_KEY = 'opgave-app:account';
+const STATE_KEY = 'opgave-app:oauth-state';
+const ATTEMPT_KEY = 'opgave-app:silent-attempt';
 
 type Saved = { token: string; expiresAt: number };
 type TokenResponse = { access_token: string; expires_in: number; error?: string };
@@ -30,6 +34,10 @@ function read(): Saved | null {
   } catch {
     return null;
   }
+}
+
+function save(token: string, expiresAt: number): void {
+  localStorage.setItem(KEY, JSON.stringify({ token, expiresAt }));
 }
 
 export function hasValidToken(): boolean {
@@ -78,7 +86,7 @@ export async function signIn(): Promise<void> {
         if (!google.accounts.oauth2.hasGrantedAllScopes(r, ...SCOPES)) {
           return reject(new Error('Appen skal have adgang til både Kalender og Drive'));
         }
-        localStorage.setItem(KEY, JSON.stringify({ token: r.access_token, expiresAt: Date.now() + r.expires_in * 1000 }));
+        save(r.access_token, Date.now() + r.expires_in * 1000);
         resolve();
       },
       error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Login blev afbrudt' : e.type)),
@@ -91,4 +99,41 @@ export function signOut(): void {
   const s = read();
   if (s && typeof google !== 'undefined') google.accounts.oauth2.revoke(s.token, () => {});
   localStorage.removeItem(KEY);
+  localStorage.removeItem(ACCOUNT_KEY);
+}
+
+/** Husk Google-kontoen, så stille fornyelse ikke skal vælge konto. */
+export function rememberAccount(email: string | undefined): void {
+  if (email) localStorage.setItem(ACCOUNT_KEY, email);
+}
+
+export function hasRememberedAccount(): boolean {
+  return localStorage.getItem(ACCOUNT_KEY) !== null;
+}
+
+/** Tager imod Googles svar efter en stille fornyelse (kaldes ved opstart). */
+export function consumeRedirect(): void {
+  const r = parseTokenHash(location.hash, sessionStorage.getItem(STATE_KEY), Date.now());
+  if (!r) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  sessionStorage.removeItem(STATE_KEY);
+  if ('token' in r) save(r.token, r.expiresAt);
+}
+
+/**
+ * Fornyer et udløbet login uden dialog ved at sende siden forbi Google og tilbage.
+ * Returnerer true, hvis siden er på vej væk. Prøver højst hvert 5. minut, så en
+ * fejl (fx at Google vil have brugeren til at vælge konto) ikke giver en løkke.
+ */
+export function trySilentSignIn(): boolean {
+  if (!wasSignedIn() || hasValidToken() || !navigator.onLine) return false;
+  const last = Number(sessionStorage.getItem(ATTEMPT_KEY) ?? 0);
+  if (Date.now() - last < 5 * 60_000) return false;
+  sessionStorage.setItem(ATTEMPT_KEY, String(Date.now()));
+  const state = crypto.randomUUID();
+  sessionStorage.setItem(STATE_KEY, state);
+  location.assign(
+    buildSilentAuthUrl({ clientId: CLIENT_ID, redirectUri: APP_URL, scopes: SCOPES, state, loginHint: localStorage.getItem(ACCOUNT_KEY) ?? undefined }),
+  );
+  return true;
 }

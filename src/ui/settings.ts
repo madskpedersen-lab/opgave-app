@@ -16,6 +16,13 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
   const s = ctx.store.data.settings;
   const from = hourSelect(0, 23, s.visibleHours.start);
   const to = hourSelect(1, 24, s.visibleHours.end);
+  const askMode = h('select', {}, h('option', { value: 'immediately' }, 'Umiddelbart efter opgaven'), h('option', { value: 'at' }, 'På et bestemt tidspunkt'));
+  askMode.value = s.askAfter === 'immediately' ? 'immediately' : 'at';
+  const askTime = h('input', { type: 'time', value: s.askAfter === 'immediately' ? '20:00' : s.askAfter });
+  const askTimeLabel = h('label', {}, 'Tidspunkt', askTime);
+  const syncAsk = () => { askTimeLabel.hidden = askMode.value !== 'at'; };
+  askMode.addEventListener('change', syncAsk);
+  syncAsk();
   const reminder = h('input', { type: 'time', value: s.sundayReminderTime });
   const surface = h('input', { type: 'number', min: 0, max: 60, value: s.surfaceDaysBefore });
 
@@ -24,6 +31,10 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
     const end = Number(to.value);
     if (end <= start) {
       toast('Sluttid skal være efter starttid');
+      return;
+    }
+    if (askMode.value === 'at' && !askTime.value) {
+      toast('Vælg hvornår du vil spørges');
       return;
     }
     if (!reminder.value) {
@@ -37,6 +48,7 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
     }
     const patch: Partial<Settings> = {
       visibleHours: { start, end },
+      askAfter: askMode.value === 'at' ? askTime.value : 'immediately',
       sundayReminderTime: reminder.value,
       surfaceDaysBefore: surfaceDays,
     };
@@ -51,6 +63,10 @@ export function mountSettings(ctx: Ctx, root: HTMLElement): () => void {
       h('h2', {}, 'Vist tidsrum'),
       h('p', { class: 'muted' }, 'De timer kalenderen viser – ens for alle ugens dage.'),
       h('div', { class: 'hours-row' }, h('label', {}, 'Fra', from), h('label', {}, 'Til', to)),
+      h('h2', {}, 'Spørg om opgaver er gjort'),
+      h('label', {}, 'Hvornår', askMode),
+      askTimeLabel,
+      h('p', { class: 'muted' }, 'Ved et bestemt tidspunkt spørges der om dagens opgaver første gang du åbner appen efter tidspunktet.'),
       h('h2', {}, 'Søndagspåmindelse'),
       h('label', {}, 'Tidspunkt', reminder),
       h('h2', {}, 'Tilbagevendende opgaver'),

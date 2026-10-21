@@ -8,6 +8,7 @@ test('standarddata viser 06-23 og har søndagspåmindelse kl. 18', () => {
   expect(d.settings.visibleHours).toEqual({ start: 6, end: 23 });
   expect(d.settings.sundayReminderTime).toBe('18:00');
   expect(d.settings.surfaceDaysBefore).toBe(7);
+  expect(d.settings.askAfter).toBe('immediately');
 });
 
 test('hvert kald giver et nyt objekt', () => {
@@ -23,7 +24,7 @@ test('normalizeData fjerner gamle ledige tidsrum og tilføjer vist tidsrum', () 
     settings: { windows: { 1: { start: '08:00', end: '21:00' } }, sundayReminderTime: '19:00', surfaceDaysBefore: 3, tasksCalendarId: 'c' },
   };
   const d = normalizeData(old as never);
-  expect(d.settings).toEqual({ visibleHours: { start: 6, end: 23 }, sundayReminderTime: '19:00', surfaceDaysBefore: 3, tasksCalendarId: 'c' });
+  expect(d.settings).toEqual({ visibleHours: { start: 6, end: 23 }, askAfter: 'immediately', sundayReminderTime: '19:00', surfaceDaysBefore: 3, tasksCalendarId: 'c' });
 });
 
 test('normalizeData bevarer et valgt vist tidsrum', () => {

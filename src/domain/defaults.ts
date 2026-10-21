@@ -3,6 +3,7 @@ import type { AppData, Settings } from './types';
 export function defaultSettings(): Settings {
   return {
     visibleHours: { start: 6, end: 23 },
+    askAfter: 'immediately',
     sundayReminderTime: '18:00',
     surfaceDaysBefore: 7,
   };

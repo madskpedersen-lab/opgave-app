@@ -1,7 +1,9 @@
 import { createActions } from '../actions';
 import { APP_URL, CLIENT_ID } from '../config';
 import { toDateStr } from '../domain/dates';
-import { hasValidToken, initAuth, signIn, signOut, wasSignedIn } from '../google/auth';
+import {
+  consumeRedirect, hasRememberedAccount, hasValidToken, initAuth, rememberAccount, signIn, signOut, trySilentSignIn, wasSignedIn,
+} from '../google/auth';
 import { createCalendarApi } from '../google/calendar';
 import { createDrive } from '../google/drive';
 import { AuthError, OfflineError } from '../google/http';
@@ -21,12 +23,15 @@ export async function startApp(root: HTMLElement): Promise<void> {
     root.replaceChildren(h('p', { class: 'empty' }, 'VITE_GOOGLE_CLIENT_ID mangler. Se docs/opsaetning.md.'));
     return;
   }
+  consumeRedirect();
+  if (trySilentSignIn()) return; // siden er på vej forbi Google og tilbage
   await initAuth();
 
   const store = new Store(createDrive(), localStorage);
+  const calendarApi = createCalendarApi();
   const actions = createActions({
     store,
-    calendar: createCalendarApi(),
+    calendar: calendarApi,
     now: () => new Date(),
     newId: () => crypto.randomUUID(),
     appUrl: APP_URL,
@@ -90,6 +95,7 @@ export async function startApp(root: HTMLElement): Promise<void> {
   async function syncAll() {
     if (syncing) return;
     if (!hasValidToken()) {
+      if (trySilentSignIn()) return;
       showBanner('Du skal logge ind igen.', { label: 'Log ind', onClick: login });
       return;
     }
@@ -97,6 +103,7 @@ export async function startApp(root: HTMLElement): Promise<void> {
     const ok = await guard(async () => {
       await store.sync();
       await actions.ensureSetup();
+      if (!hasRememberedAccount()) rememberAccount((await calendarApi.listCalendars()).find((c) => c.primary)?.id);
       return actions.reconcile();
     });
     syncing = false;

@@ -108,7 +108,7 @@ export function createActions(deps: ActionDeps) {
       await store.update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
     },
 
-    async schedule(taskId: string, start: Date, end: Date): Promise<void> {
+    async schedule(taskId: string, start: Date, end: Date): Promise<Block> {
       requireOnline();
       const t = find(taskId);
       const ev = await calendar.createEvent(calId(), {
@@ -117,7 +117,9 @@ export function createActions(deps: ActionDeps) {
         end: end.toISOString(),
         taskId,
       });
-      await mapTask(taskId, (x) => addBlock(x, { eventId: ev.id, start: ev.start, end: ev.end }));
+      const block = { eventId: ev.id, start: ev.start, end: ev.end };
+      await mapTask(taskId, (x) => addBlock(x, block));
+      return block;
     },
 
     async move(taskId: string, eventId: string, start: Date, end: Date): Promise<void> {
@@ -164,9 +166,10 @@ export function createActions(deps: ActionDeps) {
           events.set(b.eventId, ev && { start: ev.start, end: ev.end });
         }),
       );
-      const result = reconcile(store.data.tasks, events, deps.now());
+      const askAfter = store.data.settings.askAfter;
+      const result = reconcile(store.data.tasks, events, deps.now(), askAfter);
       if (JSON.stringify(result.tasks) !== JSON.stringify(store.data.tasks)) {
-        await store.update((d) => ({ ...d, tasks: reconcile(d.tasks, events, deps.now()).tasks }));
+        await store.update((d) => ({ ...d, tasks: reconcile(d.tasks, events, deps.now(), askAfter).tasks }));
       }
       return result.questions;
     },

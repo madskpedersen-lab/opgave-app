@@ -97,6 +97,16 @@ describe('færdig og afstemning', () => {
     expect(task().dueDate).toBe('2026-10-06');
     expect(task().scheduled).toBeUndefined();
   });
+  test('reconcile venter til spørgetidspunktet', async () => {
+    await actions.updateSettings({ askAfter: '20:00' });
+    await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
+    const b = await actions.schedule('t1', new Date(2026, 8, 28, 11), new Date(2026, 8, 28, 12));
+    expect(b.eventId).toBe(task().scheduled!.eventId);
+    now = new Date(2026, 8, 28, 13);
+    expect(await actions.reconcile()).toHaveLength(0);
+    now = new Date(2026, 8, 28, 20, 5);
+    expect(await actions.reconcile()).toHaveLength(1);
+  });
   test('nej sletter begivenheden og gør opgaven klar igen', async () => {
     await actions.createTask({ title: 'A', durationMin: 60, kind: 'once' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 15));
