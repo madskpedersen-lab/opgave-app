@@ -170,6 +170,12 @@ describe('færdig og afstemning', () => {
     expect(task().completedAt).toBeUndefined();
     expect(task().scheduled).toEqual(b);
   });
+  test('reorder gemmer brugerens rækkefølge', async () => {
+    await actions.createTask({ title: 'A', durationMin: 30, kind: 'once' });
+    await actions.createTask({ title: 'B', durationMin: 30, kind: 'once' });
+    await actions.reorder(['t2', 't1']);
+    expect(store.data.tasks.map((t) => [t.id, t.order])).toEqual([['t1', 1], ['t2', 0]]);
+  });
   test('deleteTask kan slette begivenheder', async () => {
     await actions.createTask({ title: 'Drivhus', durationMin: 120, kind: 'project' });
     await actions.schedule('t1', new Date(2026, 8, 29, 14), new Date(2026, 8, 29, 16));

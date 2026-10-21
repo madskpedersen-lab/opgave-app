@@ -108,3 +108,7 @@ body.placing .fc-header-toolbar { display: none; }
 body.placing .drawer { max-height: 0 !important; border-top: 0; transition: none; }
 .hours-row { display: flex; gap: 12px; }
 .hours-row label { flex: 1; }
+.task-item { display: flex; align-items: center; gap: 8px; }
+.task-text { flex: 1; min-width: 0; }
+.drag-handle { font-size: 22px; line-height: 1; color: var(--muted); padding: 8px 4px 8px 12px; touch-action: none; cursor: grab; }
+.sort-ghost { opacity: 0.4; }

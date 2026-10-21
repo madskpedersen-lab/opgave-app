@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject,
-  groupTasks, isOverdue, moveBlock, newTask, projectStats, reactivateBlock, removeBlock, restoreTask,
+  applyOrder, groupTasks, isOverdue, moveBlock, newTask, projectStats, reactivateBlock, removeBlock, restoreTask,
 } from '../../src/domain/tasks';
 import type { Task } from '../../src/domain/types';
 
@@ -163,5 +163,26 @@ describe('reactivateBlock', () => {
     const t = reactivateBlock(p, b);
     expect(t.completedAt).toBeUndefined();
     expect(t.sessions).toEqual([{ ...b, status: 'planned' }]);
+  });
+});
+
+describe('prioritering', () => {
+  const today = '2026-09-28';
+  test('opgaver med rækkefølge kommer først, sorteret; resten bevarer deres sortering', () => {
+    const a = { ...once(), id: 'a' };
+    const b = { ...once(), id: 'b', order: 1 };
+    const c = { ...once(), id: 'c', order: 0 };
+    expect(groupTasks([a, b, c], 7, today).ready.map((t) => t.id)).toEqual(['c', 'b', 'a']);
+    const d1 = { ...car(), id: 'd1', dueDate: '2026-09-29' };
+    const d2 = { ...car(), id: 'd2', dueDate: '2026-09-30', order: 0 };
+    expect(groupTasks([d1, d2], 7, today).dueSoon.map((t) => t.id)).toEqual(['d2', 'd1']);
+    const p1 = { ...house(), id: 'p1', order: 2 };
+    const p2 = { ...house(), id: 'p2', order: 1 };
+    expect(groupTasks([p1, p2], 7, today).projects.map((t) => t.id)).toEqual(['p2', 'p1']);
+  });
+  test('applyOrder giver de nævnte opgaver rækkefølge efter listen og rører ikke andre', () => {
+    const tasks = [{ ...once(), id: 'a' }, { ...once(), id: 'b' }, { ...once(), id: 'x', order: 5 }];
+    const out = applyOrder(tasks, ['b', 'a']);
+    expect(out.map((t) => [t.id, t.order])).toEqual([['a', 1], ['b', 0], ['x', 5]]);
   });
 });

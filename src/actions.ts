@@ -1,7 +1,7 @@
 import { nextSunday, toDateStr } from './domain/dates';
 import { reconcile, type EventTimes, type Question } from './domain/reconcile';
 import {
-  activeBlocks, addBlock, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
+  activeBlocks, addBlock, applyOrder, completeSession, completeTask, editTask, finishProject, moveBlock, newTask, removeBlock,
   reactivateBlock, restoreTask,
 } from './domain/tasks';
 import type { AppData, Block, Settings, Task, TaskInput } from './domain/types';
@@ -148,6 +148,11 @@ export function createActions(deps: ActionDeps) {
     async finishProject(taskId: string): Promise<void> {
       requireOnline();
       await mapTask(taskId, (t) => finishProject(t, deps.now().toISOString()));
+    },
+
+    async reorder(ids: string[]): Promise<void> {
+      requireOnline();
+      await store.update((d) => ({ ...d, tasks: applyOrder(d.tasks, ids) }));
     },
 
     async restoreTask(taskId: string): Promise<void> {

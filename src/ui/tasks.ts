@@ -1,3 +1,4 @@
+import Sortable from 'sortablejs';
 import { activeBlocks, groupTasks, isOverdue } from '../domain/tasks';
 import type { Task } from '../domain/types';
 import type { Ctx } from './context';
@@ -34,7 +35,10 @@ export async function openTaskActions(ctx: Ctx, t: Task): Promise<void> {
   }
 }
 
-export function taskItem(ctx: Ctx, t: Task): HTMLElement {
+export function taskItem(ctx: Ctx, t: Task, opts: { sortable?: boolean } = {}): HTMLElement {
+  const handle = opts.sortable
+    ? h('span', { class: 'drag-handle', 'aria-label': 'Træk for at ændre rækkefølge', onclick: (e: Event) => e.stopPropagation() }, '≡')
+    : null;
   return h(
     'div',
     {
@@ -44,8 +48,13 @@ export function taskItem(ctx: Ctx, t: Task): HTMLElement {
       'data-duration': t.durationMin,
       onclick: () => openTaskActions(ctx, t),
     },
-    h('div', { class: 'task-title' }, t.kind === 'project' ? `🔨 ${t.title}` : t.title),
-    h('div', { class: 'task-meta' }, taskMeta(t, ctx.today())),
+    h(
+      'div',
+      { class: 'task-text' },
+      h('div', { class: 'task-title' }, t.kind === 'project' ? `🔨 ${t.title}` : t.title),
+      h('div', { class: 'task-meta' }, taskMeta(t, ctx.today())),
+    ),
+    handle,
   );
 }
 
@@ -54,6 +63,30 @@ export function mountTasks(ctx: Ctx, root: HTMLElement): () => void {
   const fab = h('button', { class: 'fab', 'aria-label': 'Ny opgave', onclick: () => openTaskForm(ctx) }, '+');
   root.append(list, fab);
 
+  let sortables: Sortable[] = [];
+
+  /** En gruppe hvor rækkefølgen kan ændres ved at trække i grebet ≡. */
+  const sortableSection = (title: string, tasks: Task[]): HTMLElement | null => {
+    if (tasks.length === 0) return null;
+    const items = h('div', { class: 'sortable' }, ...tasks.map((t) => taskItem(ctx, t, { sortable: tasks.length > 1 })));
+    if (tasks.length > 1) {
+      sortables.push(
+        Sortable.create(items, {
+          handle: '.drag-handle',
+          animation: 150,
+          ghostClass: 'sort-ghost',
+          forceFallback: true, // samme træk med mus og finger
+          onEnd: (e) => {
+            if (e.oldIndex === e.newIndex) return;
+            const ids = [...items.children].map((el) => (el as HTMLElement).dataset.taskId!);
+            ctx.guard(() => ctx.actions.reorder(ids)).then(render); // render igen, hvis gem fejlede
+          },
+        }),
+      );
+    }
+    return h('section', {}, h('h2', {}, title), items);
+  };
+
   const section = (title: string, tasks: Task[], collapsed = false): HTMLElement | null => {
     if (tasks.length === 0) return null;
     const items = tasks.map((t) => taskItem(ctx, t));
@@ -61,18 +94,28 @@ export function mountTasks(ctx: Ctx, root: HTMLElement): () => void {
     return h('details', {}, h('summary', {}, `${title} (${tasks.length})`), ...items);
   };
 
+  const destroySortables = () => {
+    sortables.forEach((s) => s.destroy());
+    sortables = [];
+  };
+
   const render = () => {
+    destroySortables();
     const g = groupTasks(ctx.store.data.tasks, ctx.store.data.settings.surfaceDaysBefore, ctx.today());
     const sections = [
-      section('Forfalder snart', g.dueSoon),
-      section('Klar', g.ready),
+      sortableSection('Forfalder snart', g.dueSoon),
+      sortableSection('Klar', g.ready),
       section('Planlagt', g.scheduled),
-      section('Store opgaver', g.projects),
+      sortableSection('Store opgaver', g.projects),
       section('Hviler', g.resting, true),
       section('Historik', g.history, true),
     ].filter((s): s is HTMLElement => s !== null);
     list.replaceChildren(...(sections.length ? sections : [h('p', { class: 'empty' }, 'Ingen opgaver endnu. Tryk + for at oprette en.')]));
   };
   render();
-  return ctx.store.subscribe(render);
+  const unsubscribe = ctx.store.subscribe(render);
+  return () => {
+    unsubscribe();
+    destroySortables();
+  };
 }

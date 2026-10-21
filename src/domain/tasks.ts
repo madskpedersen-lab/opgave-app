@@ -90,6 +90,12 @@ export function restoreTask(t: Task, now: Date): Task {
   return next;
 }
 
+/** Giver opgaverne i `ids` rækkefølge efter deres plads i listen. */
+export function applyOrder(tasks: Task[], ids: string[]): Task[] {
+  const pos = new Map(ids.map((id, i) => [id, i]));
+  return tasks.map((t) => (pos.has(t.id) ? { ...t, order: pos.get(t.id)! } : t));
+}
+
 export function activeBlocks(t: Task): Block[] {
   if (t.completedAt) return [];
   if (t.kind === 'project') {
@@ -129,7 +135,13 @@ export function groupTasks(tasks: Task[], surfaceDaysBefore: number, today: stri
     } else g.ready.push(t);
   }
   const byDue = (a: Task, b: Task) => a.dueDate!.localeCompare(b.dueDate!);
-  g.dueSoon.sort(byDue);
+  // Prioriterede opgaver først efter deres rækkefølge; resten i den hidtidige sortering.
+  const byOrder = (fallback: (a: Task, b: Task) => number) => (a: Task, b: Task) =>
+    (a.order ?? Infinity) - (b.order ?? Infinity) || fallback(a, b);
+  const keep = () => 0;
+  g.dueSoon.sort(byOrder(byDue));
+  g.ready.sort(byOrder(keep));
+  g.projects.sort(byOrder(keep));
   g.resting.sort(byDue);
   g.scheduled.sort((a, b) => a.scheduled!.start.localeCompare(b.scheduled!.start));
   g.history.sort((a, b) => b.completedAt!.localeCompare(a.completedAt!));

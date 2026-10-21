@@ -13,9 +13,11 @@
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
     "@fullcalendar/interaction": "^6.1.21",
-    "@fullcalendar/timegrid": "^6.1.21"
+    "@fullcalendar/timegrid": "^6.1.21",
+    "sortablejs": "^1.15.7"
   },
   "devDependencies": {
+    "@types/sortablejs": "^1.15.9",
     "typescript": "~5.9",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"

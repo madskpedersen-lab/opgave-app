@@ -19,6 +19,8 @@ export type Task = {
   sessions?: Session[];
   completedAt?: string;
   history: string[];
+  /** Brugerens prioritering inden for gruppen (lavest først). Mangler = ikke sorteret endnu. */
+  order?: number;
 };
 
 export type TaskInput = {
